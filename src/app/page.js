@@ -371,7 +371,7 @@ export default function PyTorchTritonExplorer() {
       style={{
         display: "flex",
         height: "100vh",
-        padding: "0.1%",
+        padding: "0.2%",
         paddingRight: "0.2%",
         backgroundImage: "url('katze.png')",
         backgroundSize: "cover",

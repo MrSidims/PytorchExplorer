@@ -1,0 +1,80 @@
+name: Run PyTorch IR Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', 'setup_backend.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.npm
+            node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json', 'setup_frontend.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Set up backend dependencies
+        run: bash setup_backend.sh
+
+      - name: Prepend LLVM 21 to PATH
+        run: echo "/usr/lib/llvm-21/bin" >> $GITHUB_PATH
+
+      - name: Set up frontend
+        run: bash setup_frontend.sh
+
+      - name: Start backend server in background
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          source mlir_venv/bin/activate
+          uvicorn backend.server:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
+        shell: bash
+
+      - name: Start frontend server in background
+        run: |
+          npm run dev &
+        shell: bash
+
+      - name: Wait for backend to be ready
+        run: |
+          for i in {1..30}; do
+            if curl -s http://localhost:8000/docs > /dev/null; then
+              echo "Backend ready"
+              exit 0
+            fi
+            echo "Waiting for backend..."
+            sleep 2
+          done
+          echo "Backend did not start in time. Dumping log:"
+          cat backend.log
+          exit 1
+
+      - name: Run tests
+        run: |
+          source mlir_venv/bin/activate
+          pytest tests/
+        shell: bash
