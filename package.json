@@ -1,0 +1,29 @@
+{
+  "name": "pytorch-ir-explorer",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "start:all": "concurrently \"npm run dev\" \"./mlir_venv/bin/python -m uvicorn backend.server:app --host 0.0.0.0 --port 8000 --reload\""
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@shadcn/ui": "^0.0.4",
+    "next": "^15.2.4",
+    "prismjs": "^1.30.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-monaco-editor": "^0.58.0",
+    "react-simple-code-editor": "^0.14.1",
+    "react-split": "^2.0.14"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.0.14"
+  }
+}
