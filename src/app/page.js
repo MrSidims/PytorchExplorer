@@ -632,7 +632,9 @@ export default function PyTorchTritonExplorer() {
                               borderRadius: "5px",
                               fontWeight: "bold",
                               cursor: "pointer",
-                              height: "32px",
+                              whiteSpace: "nowrap",
+                              minHeight: "32px",
+                              flexShrink: 0,
                             }}
                           >
                             torch-mlir-opt from this
@@ -648,7 +650,10 @@ export default function PyTorchTritonExplorer() {
                               borderRadius: "5px",
                               fontWeight: "bold",
                               cursor: "pointer",
-                              height: "32px",
+                              fontSize: "0.65em",
+                              whiteSpace: "nowrap",
+                              minHeight: "32px",
+                              flexShrink: 0,
                             }}
                           >
                             mlir-opt from this
@@ -666,7 +671,10 @@ export default function PyTorchTritonExplorer() {
                               borderRadius: "5px",
                               fontWeight: "bold",
                               cursor: "pointer",
-                              height: "32px",
+                              fontSize: "0.65em",
+                              whiteSpace: "nowrap",
+                              minHeight: "32px",
+                              flexShrink: 0,
                             }}
                           >
                             mlir-translate from this
@@ -682,7 +690,10 @@ export default function PyTorchTritonExplorer() {
                               borderRadius: "5px",
                               fontWeight: "bold",
                               cursor: "pointer",
-                              height: "32px",
+                              fontSize: "0.65em",
+                              whiteSpace: "nowrap",
+                              minHeight: "32px",
+                              flexShrink: 0,
                             }}
                           >
                             opt from this
@@ -698,7 +709,10 @@ export default function PyTorchTritonExplorer() {
                               borderRadius: "5px",
                               fontWeight: "bold",
                               cursor: "pointer",
-                              height: "32px",
+                              fontSize: "0.65em",
+                              whiteSpace: "nowrap",
+                              minHeight: "32px",
+                              flexShrink: 0,
                             }}
                           >
                             llc from this
@@ -716,7 +730,10 @@ export default function PyTorchTritonExplorer() {
                               borderRadius: "5px",
                               fontWeight: "bold",
                               cursor: "pointer",
-                              height: "32px",
+                              fontSize: "0.65em",
+                              whiteSpace: "nowrap",
+                              minHeight: "32px",
+                              flexShrink: 0,
                             }}
                           >
                             %your tool% in $PATH from this
@@ -744,12 +761,15 @@ export default function PyTorchTritonExplorer() {
                             borderRadius: "5px",
                             fontWeight: "bold",
                             cursor: "pointer",
-                            height: "32px",
+                            fontSize: "0.65em",
+                            whiteSpace: "nowrap",
+                            minHeight: "32px",
+                            flexShrink: 0,
                           }}
                         >
                           {window.dumpAfterEachOpt
-                            ? "✓ Print IR after custom opts"
-                            : "Print IR after custom opts"}
+                            ? "✓ Print IR after opts"
+                            : "Print IR after opts"}
                         </button>
                       </div>
                     );
