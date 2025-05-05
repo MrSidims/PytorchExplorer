@@ -24,9 +24,9 @@ tracing models through various IR stages and transformations.
 
 ## Known issues and limitations
 
-- (PyTorch) The model and input tensor must be initialized in the provided code. If multiple models are defined, it is recommended to explicitly pair each model and its input tensor using the internal __explore__(model, input) function.
+- (PyTorch) The model and input tensor must be initialized in the provided code. If multiple models are defined, it is recommended to explicitly pair each model and its input tensor using the internal `__explore__(model, input)` function.
 
-- (PyTorch) The current version does not recognize or capture user attempts to dump IR inside the input PyTorch module. It is planned that, in the future, if the user manually calls fx.export_and_import() (or similar IR-producing APIs), the app will use that IR as the base and apply the user-defined custom toolchain.
+- (PyTorch) The current version does not recognize or capture user attempts to dump IR inside the input PyTorch module. It is planned that, in the future, if the user manually calls `fx.export_and_import()` (or similar IR-producing APIs), the app will use that IR as the base and apply the user-defined custom toolchain.
 
 - (Triton) The current implementation runs Triton kernels and retrieves IR dumps from the Triton cache directory. Timeout is set to 20s.
 
@@ -45,11 +45,25 @@ Current version is tested on Ubuntu 22.04 windows subsystem using LLVM 21 dev.
 
 ### Install dependencies
 
+In case of missing prerequisites here are some scripts to help set them up.
+
 ```bash
 git clone https://github.com/MrSidims/PytorchExplorer.git
 cd PytorchExplorer
-bash setup_frontend.sh
-bash setup_backend.sh
+source setup_frontend.sh
+```
+
+When you have venv suitable for `torch-mlir` work, install `fastapi`, `uvicorn` etc in venv like this:
+
+```bash
+pip install fastapi uvicorn pytest httpx
+```
+
+Otherwise here is the script to setup `torch`, `llvm` etc:
+
+
+```bash
+source setup_backend.sh
 ```
 
 If you want to use your builds of the tools like `torch-mlir-opt`, `mlir-opt` etc without placing them in `PATH` please setup `TORCH_MLIR_OPT_PATH` and `LLVM_BIN_PATH` environment variables.
