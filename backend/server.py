@@ -189,10 +189,10 @@ def apply_optional_passes(
 
 
 # Torch graph IR.
-def generate_torch_script_graph_ir(model, example_input):
+def generate_torch_script_graph_ir(model, example_input, pipeline, dump_each):
     try:
         traced_model = torch.jit.trace(model, example_input)
-        return str(traced_model.graph)
+        return apply_optional_passes(str(traced_model.graph), pipeline, dump_each)
     except Exception as e:
         return f"Error generating TorchScript Graph IR: {str(e)}"
 
@@ -448,7 +448,9 @@ def process_model(request: CodeRequest) -> str:
             model.eval()
 
             if request.ir_type == "torch_script_graph_ir":
-                combined_output += generate_torch_script_graph_ir(model, example_input)
+                combined_output += generate_torch_script_graph_ir(
+                    model, example_input, pipeline, request.dump_after_each_opt
+                )
             elif request.ir_type == "torch_mlir":
                 combined_output += generate_torch_mlir(
                     model, example_input, pipeline, request.dump_after_each_opt
