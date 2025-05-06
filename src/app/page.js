@@ -576,10 +576,11 @@ export default function PyTorchTritonExplorer() {
                 {(selectedLanguage === "pytorch" ||
                   selectedLanguage == "raw_ir") &&
                   (() => {
-                    const allowTorchMlirOpt = ["torch_mlir", "raw_ir"].includes(
+                    const allowTorchMlirOpt = ["torch_script_graph_ir", "torch_mlir", "raw_ir"].includes(
                       window.selectedIR
                     );
                     const allowMlirOpt = [
+                      "torch_script_graph_ir",
                       "torch_mlir",
                       "tosa_mlir",
                       "linalg_on_tensors_mlir",
@@ -588,6 +589,7 @@ export default function PyTorchTritonExplorer() {
                       "raw_ir",
                     ].includes(window.selectedIR);
                     const allowMlirTranslate = [
+                      "torch_script_graph_ir",
                       "torch_mlir",
                       "tosa_mlir",
                       "linalg_on_tensors_mlir",
@@ -595,12 +597,9 @@ export default function PyTorchTritonExplorer() {
                       "llvm_mlir",
                       "raw_ir",
                     ].includes(window.selectedIR);
-                    const allowLlvmOpt =
-                      window.selectedIR !== "torch_script_graph_ir";
-                    const allowLLC =
-                      window.selectedIR !== "torch_script_graph_ir";
-                    const allowUserTool =
-                      window.selectedIR !== "torch_script_graph_ir";
+                    const allowLlvmOpt = true;
+                    const allowLLC = true;
+                    const allowUserTool = true;
 
                     if (
                       !allowTorchMlirOpt &&
@@ -632,6 +631,7 @@ export default function PyTorchTritonExplorer() {
                               borderRadius: "5px",
                               fontWeight: "bold",
                               cursor: "pointer",
+                              fontSize: "0.65em",
                               whiteSpace: "nowrap",
                               minHeight: "32px",
                               flexShrink: 0,
