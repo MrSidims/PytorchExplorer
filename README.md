@@ -26,8 +26,6 @@ tracing models through various IR stages and transformations.
 
 - (PyTorch) The model and input tensor must be initialized in the provided code. If multiple models are defined, it is recommended to explicitly pair each model and its input tensor using the internal `__explore__(model, input)` function.
 
-- (PyTorch) The current version does not recognize or capture user attempts to dump IR inside the input PyTorch module. It is planned that, in the future, if the user manually calls `fx.export_and_import()` (or similar IR-producing APIs), the app will use that IR as the base and apply the user-defined custom toolchain.
-
 - (Triton) The current implementation runs Triton kernels and retrieves IR dumps from the Triton cache directory. Timeout is set to 20s.
 
 ## Getting Started
@@ -41,11 +39,13 @@ tracing models through various IR stages and transformations.
 - Triton
 - LLVM with mlir-opt
 
-Current version is tested on Ubuntu 22.04 windows subsystem using LLVM 21 dev.
+To setup PyTorch and Torch-MLIR it's a good idea to visit https://github.com/llvm/torch-mlir repository and follow instructions from there.
+
+Current version of the application is tested on Ubuntu 22.04 windows subsystem using LLVM 21 dev.
 
 ### Install dependencies
 
-In case of missing prerequisites here are some scripts to help set them up.
+In case of missing prerequisites here are some scripts to help set them up (runs on Debian and its derivatives).
 
 ```bash
 git clone https://github.com/MrSidims/PytorchExplorer.git
@@ -74,6 +74,8 @@ If you want to use your builds of the tools like `torch-mlir-opt`, `mlir-opt` et
 npm run start:all
 ```
 
+Then open http://localhost:3000/ in your browser and enjoy!
+
 ### Run the tests
 
 With the application (or just backend) started, run:
@@ -82,9 +84,14 @@ With the application (or just backend) started, run:
 pytest tests -v
 ```
 
+## User manual
+
+TBD
+
 ## Implementation details
 
-The app uses fx.export_and_import to inpect IR output for PyTorch.
+The app uses `fx.export_and_import` under the hood to inpect IR output for PyTorch, therefore for pre-defined lowering paths it's required for a module to have `forward` method.
+
 Lowering to LLVM IR goes through:
 
 ```bash
