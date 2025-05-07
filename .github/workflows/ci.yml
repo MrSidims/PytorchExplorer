@@ -3,8 +3,16 @@ name: Run PyTorch IR Tests
 on:
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'public/**
   push:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'public/**
+  schedule:
+  - cron: 0 0 * * *
 
 jobs:
   test:
