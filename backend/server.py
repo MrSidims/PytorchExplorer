@@ -25,6 +25,10 @@ import shutil
 import atexit
 import shutil
 
+import io
+import sys
+from contextlib import redirect_stdout, redirect_stderr
+
 app = FastAPI()
 
 app.add_middleware(
@@ -44,6 +48,7 @@ LLVM_BIN_PATH = os.environ.get("LLVM_BIN_PATH", "")
 class CodeRequest(BaseModel):
     code: str
     ir_type: str
+    selected_language: Optional[str] = "pytorch"
     custom_pipeline: Optional[List[str]] = []
     torch_mlir_opt: Optional[str] = ""
     mlir_opt: Optional[str] = ""
@@ -60,15 +65,20 @@ class FreeIRCacheRequest(BaseModel):
 
 # Get model-tensor pairs to process.
 def extract_model_input_pairs(code: str):
-    import traceback
-
     explore_pairs = []
 
     def __explore__(model, input_tensor):
         explore_pairs.append((model, input_tensor))
 
     exec_globals = {"__explore__": __explore__}
-    exec(code, exec_globals)
+
+    # Suppress stdout and stderr.
+    with open(os.devnull, "w") as devnull:
+        try:
+            with redirect_stdout(devnull), redirect_stderr(devnull):
+                exec(code, exec_globals)
+        except Exception:
+            pass
 
     # If no __explore__ calls found, try matching models and tensors heuristically.
     if not explore_pairs:
@@ -428,6 +438,26 @@ def process_model(request: CodeRequest) -> str:
     try:
         if request.ir_type.startswith("triton"):
             return compile_triton_ir(request.code, request.ir_type)
+
+        if request.ir_type == "raw_ir" and request.selected_language == "pytorch":
+            # Execute user Python, capture stdout.
+            try:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    stdout_path = os.path.join(tmpdir, "captured_output.txt")
+                    with open(stdout_path, "w") as f, redirect_stdout(
+                        f
+                    ), redirect_stderr(f):
+                        exec_globals = {}
+                        exec(request.code, exec_globals)
+
+                    with open(stdout_path, "r") as f:
+                        captured = f.read()
+
+                return apply_optional_passes(
+                    captured, build_pipeline(request), request.dump_after_each_opt
+                )
+            except Exception as e:
+                return f"Error executing user code: {str(e)}"
 
         if request.ir_type == "raw_ir":
             return apply_optional_passes(

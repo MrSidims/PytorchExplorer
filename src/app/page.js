@@ -78,6 +78,7 @@ const pytorchIROptions = [
   { value: "stablehlo_mlir", label: "StableHLO MLIR" },
   { value: "llvm_mlir", label: "LLVM MLIR" },
   { value: "llvm_ir", label: "LLVM IR" },
+  { value: "raw_ir", label: "Raw IR Output" },
 ];
 
 const tritonIROptions = [
@@ -308,6 +309,7 @@ export default function PyTorchTritonExplorer() {
     const body = {
       code,
       ir_type: window.selectedIR,
+      selected_language: selectedLanguage,
       custom_pipeline: [],
       torch_mlir_opt: window.pipeline
         .filter((p) => p.tool === "torch-mlir-opt")
