@@ -5,14 +5,14 @@ on:
     branches: [ main ]
     paths-ignore:
       - '**.md'
-      - 'public/**
+      - 'public/**'
   push:
     branches: [ main ]
     paths-ignore:
       - '**.md'
-      - 'public/**
+      - 'public/**'
   schedule:
-  - cron: 0 0 * * *
+    - cron: '0 0 * * *'
 
 jobs:
   test:
