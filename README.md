@@ -1,5 +1,7 @@
 # PyTorch IR Explorer
 
+[![Nightly](https://github.com/MrSidims/PytorchExplorer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MrSidims/PytorchExplorer/actions?query=workflow%3ACI+event%3Aschedule)
+
 An interactive web-based tool for exploring intermediate representations (IRs) of PyTorch and Triton models.
 Designed to help developers, researchers, and students visualize and understand compilation pipelines by
 tracing models through various IR stages and transformations.
