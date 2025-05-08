@@ -78,6 +78,19 @@ npm run start:all
 
 Then open http://localhost:3000/ in your browser and enjoy!
 
+### Run in a docker
+
+Build image with:
+
+```bash
+docker build -t pytorch_explorer .
+```
+
+Run it:
+```bash
+docker run -p 3000:3000 -p 8000:8000 pytorch_explorer
+```
+
 ### Run the tests
 
 With the application (or just backend) started, run:
