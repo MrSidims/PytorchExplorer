@@ -10,6 +10,8 @@
 !.yarn/releases
 !.yarn/versions
 
+mlir_venv
+
 # python temps
 __pycache__/
 

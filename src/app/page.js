@@ -303,42 +303,42 @@ export default function PyTorchTritonExplorer() {
       prev.map((w) => (w.id === id ? { ...w, loading: true } : w))
     );
 
-    const window = irWindows.find((w) => w.id === id);
-    if (!window) return;
+    const irWin = irWindows.find((w) => w.id === id);
+    if (!irWin) return;
 
     const body = {
       code,
-      ir_type: window.selectedIR,
+      ir_type: irWin.selectedIR,
       selected_language: selectedLanguage,
       custom_pipeline: [],
-      torch_mlir_opt: window.pipeline
+      torch_mlir_opt: irWin.pipeline
         .filter((p) => p.tool === "torch-mlir-opt")
         .map((p) => p.flags)
         .join(" && "),
-      mlir_opt: window.pipeline
+      mlir_opt: irWin.pipeline
         .filter((p) => p.tool === "mlir-opt")
         .map((p) => p.flags)
         .join(" && "),
-      mlir_translate: window.pipeline
+      mlir_translate: irWin.pipeline
         .filter((p) => p.tool === "mlir-translate")
         .map((p) => p.flags)
         .join(" && "),
-      llvm_opt: window.pipeline
+      llvm_opt: irWin.pipeline
         .filter((p) => p.tool === "opt")
         .map((p) => p.flags)
         .join(" && "),
-      llc: window.pipeline
+      llc: irWin.pipeline
         .filter((p) => p.tool === "llc")
         .map((p) => p.flags)
         .join(" && "),
-      user_tool: window.pipeline
+      user_tool: irWin.pipeline
         .filter((p) => p.tool === "user-tool")
         .map((p) => p.flags)
         .join(" && "),
-      dump_after_each_opt: window.dumpAfterEachOpt,
+      dump_after_each_opt: irWin.dumpAfterEachOpt,
     };
 
-    const response = await fetch("http://localhost:8000/generate_ir", {
+    const response = await fetch("http://" + window.location.hostname + ":8000/generate_ir", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -511,9 +511,9 @@ export default function PyTorchTritonExplorer() {
           </button>
         </div>
 
-        {irWindows.map((window) => (
+        {irWindows.map((irWin) => (
           <div
-            key={window.id}
+            key={irWin.id}
             style={{
               backgroundColor: "white",
               borderRadius: "8px",
@@ -532,10 +532,10 @@ export default function PyTorchTritonExplorer() {
                 alignItems: "center",
               }}
             >
-              <h3>Output {getLabelForIR(window.selectedIR)}</h3>
+              <h3>Output {getLabelForIR(irWin.selectedIR)}</h3>
               <div>
                 <button
-                  onClick={() => toggleCollapse(window.id)}
+                  onClick={() => toggleCollapse(irWin.id)}
                   style={{
                     marginRight: "8px",
                     padding: "5px",
@@ -545,10 +545,10 @@ export default function PyTorchTritonExplorer() {
                     cursor: "pointer",
                   }}
                 >
-                  {window.collapsed ? "Expand" : "Collapse"}
+                  {irWin.collapsed ? "Expand" : "Collapse"}
                 </button>
                 <button
-                  onClick={() => removeWindow(window.id)}
+                  onClick={() => removeWindow(irWin.id)}
                   style={{
                     backgroundColor: "#f66",
                     border: "none",
@@ -562,11 +562,11 @@ export default function PyTorchTritonExplorer() {
               </div>
             </div>
 
-            {!window.collapsed && (
+            {!irWin.collapsed && (
               <>
                 <select
-                  value={window.selectedIR}
-                  onChange={(e) => handleIRChange(window.id, e)}
+                  value={irWin.selectedIR}
+                  onChange={(e) => handleIRChange(irWin.id, e)}
                   style={{ marginBottom: "10px" }}
                 >
                   {getIROptions().map((opt) => (
@@ -579,7 +579,7 @@ export default function PyTorchTritonExplorer() {
                   selectedLanguage == "raw_ir") &&
                   (() => {
                     const allowTorchMlirOpt = ["torch_script_graph_ir", "torch_mlir", "raw_ir"].includes(
-                      window.selectedIR
+                      irWin.selectedIR
                     );
                     const allowMlirOpt = [
                       "torch_script_graph_ir",
@@ -589,7 +589,7 @@ export default function PyTorchTritonExplorer() {
                       "stablehlo_mlir",
                       "llvm_mlir",
                       "raw_ir",
-                    ].includes(window.selectedIR);
+                    ].includes(irWin.selectedIR);
                     const allowMlirTranslate = [
                       "torch_script_graph_ir",
                       "torch_mlir",
@@ -598,7 +598,7 @@ export default function PyTorchTritonExplorer() {
                       "stablehlo_mlir",
                       "llvm_mlir",
                       "raw_ir",
-                    ].includes(window.selectedIR);
+                    ].includes(irWin.selectedIR);
                     const allowLlvmOpt = true;
                     const allowLLC = true;
                     const allowUserTool = true;
@@ -624,7 +624,7 @@ export default function PyTorchTritonExplorer() {
                         {allowTorchMlirOpt && (
                           <button
                             onClick={() =>
-                              handleAddPass(window.id, "torch-mlir-opt")
+                              handleAddPass(irWin.id, "torch-mlir-opt")
                             }
                             style={{
                               padding: "6px 10px",
@@ -644,7 +644,7 @@ export default function PyTorchTritonExplorer() {
                         )}
                         {allowMlirOpt && (
                           <button
-                            onClick={() => handleAddPass(window.id, "mlir-opt")}
+                            onClick={() => handleAddPass(irWin.id, "mlir-opt")}
                             style={{
                               padding: "6px 10px",
                               backgroundColor: "#add8e6",
@@ -664,7 +664,7 @@ export default function PyTorchTritonExplorer() {
                         {allowMlirTranslate && (
                           <button
                             onClick={() =>
-                              handleAddPass(window.id, "mlir-translate")
+                              handleAddPass(irWin.id, "mlir-translate")
                             }
                             style={{
                               padding: "6px 10px",
@@ -684,7 +684,7 @@ export default function PyTorchTritonExplorer() {
                         )}
                         {allowLlvmOpt && (
                           <button
-                            onClick={() => handleAddPass(window.id, "opt")}
+                            onClick={() => handleAddPass(irWin.id, "opt")}
                             style={{
                               padding: "6px 10px",
                               backgroundColor: "#add8e6",
@@ -703,7 +703,7 @@ export default function PyTorchTritonExplorer() {
                         )}
                         {allowLLC && (
                           <button
-                            onClick={() => handleAddPass(window.id, "llc")}
+                            onClick={() => handleAddPass(irWin.id, "llc")}
                             style={{
                               padding: "6px 10px",
                               backgroundColor: "#add8e6",
@@ -723,7 +723,7 @@ export default function PyTorchTritonExplorer() {
                         {allowUserTool && (
                           <button
                             onClick={() =>
-                              handleAddPass(window.id, "user-tool")
+                              handleAddPass(irWin.id, "user-tool")
                             }
                             style={{
                               padding: "6px 10px",
@@ -745,7 +745,7 @@ export default function PyTorchTritonExplorer() {
                           onClick={() =>
                             setIrWindows((prev) =>
                               prev.map((w) =>
-                                w.id === window.id
+                                w.id === irWin.id
                                   ? {
                                       ...w,
                                       dumpAfterEachOpt: !w.dumpAfterEachOpt,
@@ -756,7 +756,7 @@ export default function PyTorchTritonExplorer() {
                           }
                           style={{
                             padding: "6px 10px",
-                            backgroundColor: window.dumpAfterEachOpt
+                            backgroundColor: irWin.dumpAfterEachOpt
                               ? "#5fa"
                               : "#ccc",
                             border: "none",
@@ -769,7 +769,7 @@ export default function PyTorchTritonExplorer() {
                             flexShrink: 0,
                           }}
                         >
-                          {window.dumpAfterEachOpt
+                          {irWin.dumpAfterEachOpt
                             ? "✓ Print IR after opts"
                             : "Print IR after opts"}
                         </button>
@@ -779,7 +779,7 @@ export default function PyTorchTritonExplorer() {
 
                 {(selectedLanguage === "pytorch" ||
                   selectedLanguage == "raw_ir") &&
-                  window.pipeline.length > 0 && (
+                  irWin.pipeline.length > 0 && (
                     <div
                       style={{
                         marginBottom: "10px",
@@ -821,9 +821,9 @@ export default function PyTorchTritonExplorer() {
                             fontWeight: "bold",
                           }}
                         >
-                          {getLabelForIR(window.selectedIR)}
+                          {getLabelForIR(irWin.selectedIR)}
                         </span>
-                        {window.pipeline.map((p, i) => {
+                        {irWin.pipeline.map((p, i) => {
                           const preview =
                             p.flags.length <= 25
                               ? p.flags
@@ -837,7 +837,7 @@ export default function PyTorchTritonExplorer() {
                               </span>
                               <span
                                 onClick={() =>
-                                  handleEditPass(window.id, i, p.tool, p.flags)
+                                  handleEditPass(irWin.id, i, p.tool, p.flags)
                                 }
                                 style={{
                                   backgroundColor: "#a5d6a7",
@@ -868,7 +868,7 @@ export default function PyTorchTritonExplorer() {
                   )}
 
                 <button
-                  onClick={() => generateIR(window.id)}
+                  onClick={() => generateIR(irWin.id)}
                   style={{
                     marginBottom: "6px",
                     padding: "4px",
@@ -878,15 +878,15 @@ export default function PyTorchTritonExplorer() {
                     fontWeight: "bold",
                     cursor: "pointer",
                   }}
-                  disabled={window.loading}
+                  disabled={irWin.loading}
                 >
-                  {window.loading ? "Generating..." : "Generate IR"}
+                  {irWin.loading ? "Generating..." : "Generate IR"}
                 </button>
 
                 <Editor
                   height="70vh"
                   language="mlir"
-                  value={window.output}
+                  value={irWin.output}
                   onChange={() => {}}
                   theme="mlirTheme"
                   options={{ readOnly: true }}
