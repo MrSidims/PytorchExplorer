@@ -83,7 +83,7 @@ Then open http://localhost:3000/ in your browser and enjoy!
 Build image with:
 
 ```bash
-docker build -t pytorch_explorer 
+docker build -t pytorch_explorer .
 ```
 
 Run it:
