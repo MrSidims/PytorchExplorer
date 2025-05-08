@@ -88,7 +88,7 @@ docker build -t pytorch_explorer .
 
 Run it:
 ```bash
-docker run -p 3000:3000 pytorch_explorer
+docker run -p 3000:3000 -p 8000:8000 pytorch_explorer
 ```
 
 ### Run the tests
