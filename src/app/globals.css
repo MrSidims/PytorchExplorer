@@ -35,8 +35,29 @@ a {
   text-decoration: none;
 }
 
+.tool-btn {
+  padding: 6px 10px;
+  background: #add8e6;
+  border: none;
+  border-radius: 5px;
+  font-weight: bold;
+  font-size: 0.65em;
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 32px;
+  flex-shrink: 0;
+}
+
+.ant-splitter-splitter {
+  background-color: #888;
+  transition: background-color 0.2s;
+}
+.ant-splitter-splitter:hover {
+  background-color: #555;
+}
+
 @media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+  .tool-btn {
+    background: #508bb3;
   }
 }

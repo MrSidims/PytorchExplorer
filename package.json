@@ -12,6 +12,7 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@shadcn/ui": "^0.0.4",
+    "antd": "^5.25.1",
     "next": "^15.2.4",
     "prismjs": "^1.30.0",
     "react": "^19.0.0",
