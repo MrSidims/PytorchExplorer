@@ -4,7 +4,7 @@ import httpx
 API_URL = "http://localhost:8000/generate_ir"
 
 
-def test_user_controlled_ir_print():
+def test_torch_user_controlled_ir_print():
     code = """
 import torch
 import torch.nn as nn

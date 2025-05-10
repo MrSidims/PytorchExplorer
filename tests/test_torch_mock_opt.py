@@ -17,7 +17,7 @@ def mock_opt_path():
 
     shutil.rmtree(build_dir)
 
-def test_mock_user_tool(mock_opt_path):
+def test_torch_mock_opt(mock_opt_path):
     code = """
 import torch
 import torch.nn as nn
