@@ -5,6 +5,13 @@ import shutil
 import pytest
 import httpx
 
+import torch
+
+pytestmark = pytest.mark.skipif(
+    not torch.cuda.is_available(),
+    reason="No NVIDIA GPU detected. Skip",
+)
+
 @pytest.fixture(scope="session")
 def mock_opt_path():
     cpp_src = os.path.abspath("tests/cpp_sources/mock-opt.cpp")
