@@ -4,7 +4,7 @@ import httpx
 API_URL = "http://localhost:8000/generate_ir"
 
 
-def test_two_models():
+def test_torch_mlir_two_models():
     code = """
 import torch
 import torch.nn as nn

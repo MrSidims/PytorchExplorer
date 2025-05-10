@@ -84,6 +84,9 @@ const pytorchIROptions = [
 const tritonIROptions = [
   { value: "triton_ir", label: "Triton IR" },
   { value: "triton_gpu_ir", label: "Triton GPU IR" },
+  // FIXME: 'Triton' LLVM IR is basically LLVM IR. Right now it's separated
+  //        due to the fact, that all of Triron IRs are just dumps from the cache dir
+  //        after model execution.
   { value: "triton_llvm_ir", label: "LLVM IR" },
   { value: "triton_nvptx", label: "NVPTX" },
 ];
@@ -168,8 +171,10 @@ export default function PyTorchTritonExplorer() {
     if (flags !== null) {
       setIrWindows((prev) =>
         prev.map((w) =>
-          w.id === id ? { ...w, pipeline: [...w.pipeline, { tool, flags }] } : w
-        )
+          w.id === id
+            ? { ...w, pipeline: [...w.pipeline, { tool, flags }] }
+            : w,
+        ),
       );
     }
   };
@@ -185,8 +190,8 @@ export default function PyTorchTritonExplorer() {
                 { tool: currentTool, flags: currentFlags },
               ],
             }
-          : w
-      )
+          : w,
+      ),
     );
     setModalVisible(false);
   };
@@ -206,11 +211,11 @@ export default function PyTorchTritonExplorer() {
           ? {
               ...w,
               pipeline: w.pipeline.map((p, i) =>
-                i === editPassIndex ? { tool: editTool, flags: editFlags } : p
+                i === editPassIndex ? { tool: editTool, flags: editFlags } : p,
               ),
             }
-          : w
-      )
+          : w,
+      ),
     );
     setEditModalVisible(false);
   };
@@ -223,8 +228,8 @@ export default function PyTorchTritonExplorer() {
               ...w,
               pipeline: w.pipeline.filter((_, i) => i !== editPassIndex),
             }
-          : w
-      )
+          : w,
+      ),
     );
     setEditModalVisible(false);
   };
@@ -285,7 +290,7 @@ export default function PyTorchTritonExplorer() {
 
   const toggleCollapse = (id) => {
     setIrWindows((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, collapsed: !w.collapsed } : w))
+      prev.map((w) => (w.id === id ? { ...w, collapsed: !w.collapsed } : w)),
     );
   };
 
@@ -293,14 +298,14 @@ export default function PyTorchTritonExplorer() {
     const value = event.target.value;
     setIrWindows((prev) =>
       prev.map((w) =>
-        w.id === id ? { ...w, selectedIR: value, pipeline: [] } : w
-      )
+        w.id === id ? { ...w, selectedIR: value, pipeline: [] } : w,
+      ),
     );
   };
 
   const generateIR = async (id) => {
     setIrWindows((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, loading: true } : w))
+      prev.map((w) => (w.id === id ? { ...w, loading: true } : w)),
     );
 
     const irWin = irWindows.find((w) => w.id === id);
@@ -338,17 +343,20 @@ export default function PyTorchTritonExplorer() {
       dump_after_each_opt: irWin.dumpAfterEachOpt,
     };
 
-    const response = await fetch("http://" + window.location.hostname + ":8000/generate_ir", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const response = await fetch(
+      "http://" + window.location.hostname + ":8000/generate_ir",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
 
     const data = await response.json();
     setIrWindows((prev) =>
       prev.map((w) =>
-        w.id === id ? { ...w, output: data.output, loading: false } : w
-      )
+        w.id === id ? { ...w, output: data.output, loading: false } : w,
+      ),
     );
   };
 
@@ -575,190 +583,69 @@ export default function PyTorchTritonExplorer() {
                     </option>
                   ))}
                 </select>
-                {(selectedLanguage === "pytorch" ||
-                  selectedLanguage == "raw_ir") &&
-                  (() => {
-                    const allowTorchMlirOpt = ["torch_script_graph_ir", "torch_mlir", "raw_ir"].includes(
-                      irWin.selectedIR
-                    );
-                    const allowMlirOpt = [
-                      "torch_script_graph_ir",
-                      "torch_mlir",
-                      "tosa_mlir",
-                      "linalg_on_tensors_mlir",
-                      "stablehlo_mlir",
-                      "llvm_mlir",
-                      "raw_ir",
-                    ].includes(irWin.selectedIR);
-                    const allowMlirTranslate = [
-                      "torch_script_graph_ir",
-                      "torch_mlir",
-                      "tosa_mlir",
-                      "linalg_on_tensors_mlir",
-                      "stablehlo_mlir",
-                      "llvm_mlir",
-                      "raw_ir",
-                    ].includes(irWin.selectedIR);
-                    const allowLlvmOpt = true;
-                    const allowLLC = true;
-                    const allowUserTool = true;
+                {(() => {
+                  const allowTorchMlirOpt = [
+                    "torch_script_graph_ir",
+                    "torch_mlir",
+                    "raw_ir",
+                  ].includes(irWin.selectedIR);
+                  const allowMlirOpt = [
+                    "torch_script_graph_ir",
+                    "torch_mlir",
+                    "tosa_mlir",
+                    "linalg_on_tensors_mlir",
+                    "stablehlo_mlir",
+                    "llvm_mlir",
+                    "raw_ir",
+                  ].includes(irWin.selectedIR);
+                  const allowMlirTranslate = [
+                    "torch_script_graph_ir",
+                    "torch_mlir",
+                    "tosa_mlir",
+                    "linalg_on_tensors_mlir",
+                    "stablehlo_mlir",
+                    "llvm_mlir",
+                    "raw_ir",
+                  ].includes(irWin.selectedIR);
+                  const allowTritonOpt = [
+                    "triton_ir",
+                    "triton_gpu_ir",
+                  ].includes(irWin.selectedIR);
+                  const allowTritonLLVMOpt = [
+                    "triton_ir",
+                    "triton_gpu_ir",
+                    "triton_llvm_ir"
+                  ].includes(irWin.selectedIR);
+                  const allowLlvmOpt = irWin.selectedIR != "triton_nvptx";
+                  const allowLLC = irWin.selectedIR != "triton_nvptx";
+                  const allowUserTool = true;
 
-                    if (
-                      !allowTorchMlirOpt &&
-                      !allowMlirOpt &&
-                      !allowMlirTranslate &&
-                      !allowLlvmOpt &&
-                      !allowUserTool
-                    )
-                      return null;
+                  if (
+                    !allowTorchMlirOpt &&
+                    !allowMlirOpt &&
+                    !allowMlirTranslate &&
+                    !allowLlvmOpt &&
+                    !allowUserTool
+                  )
+                    return null;
 
-                    return (
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "8px",
-                          marginBottom: "10px",
-                          alignItems: "center",
-                        }}
-                      >
-                        {allowTorchMlirOpt && (
-                          <button
-                            onClick={() =>
-                              handleAddPass(irWin.id, "torch-mlir-opt")
-                            }
-                            style={{
-                              padding: "6px 10px",
-                              backgroundColor: "#add8e6",
-                              border: "none",
-                              borderRadius: "5px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                              fontSize: "0.65em",
-                              whiteSpace: "nowrap",
-                              minHeight: "32px",
-                              flexShrink: 0,
-                            }}
-                          >
-                            torch-mlir-opt from this
-                          </button>
-                        )}
-                        {allowMlirOpt && (
-                          <button
-                            onClick={() => handleAddPass(irWin.id, "mlir-opt")}
-                            style={{
-                              padding: "6px 10px",
-                              backgroundColor: "#add8e6",
-                              border: "none",
-                              borderRadius: "5px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                              fontSize: "0.65em",
-                              whiteSpace: "nowrap",
-                              minHeight: "32px",
-                              flexShrink: 0,
-                            }}
-                          >
-                            mlir-opt from this
-                          </button>
-                        )}
-                        {allowMlirTranslate && (
-                          <button
-                            onClick={() =>
-                              handleAddPass(irWin.id, "mlir-translate")
-                            }
-                            style={{
-                              padding: "6px 10px",
-                              backgroundColor: "#add8e6",
-                              border: "none",
-                              borderRadius: "5px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                              fontSize: "0.65em",
-                              whiteSpace: "nowrap",
-                              minHeight: "32px",
-                              flexShrink: 0,
-                            }}
-                          >
-                            mlir-translate from this
-                          </button>
-                        )}
-                        {allowLlvmOpt && (
-                          <button
-                            onClick={() => handleAddPass(irWin.id, "opt")}
-                            style={{
-                              padding: "6px 10px",
-                              backgroundColor: "#add8e6",
-                              border: "none",
-                              borderRadius: "5px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                              fontSize: "0.65em",
-                              whiteSpace: "nowrap",
-                              minHeight: "32px",
-                              flexShrink: 0,
-                            }}
-                          >
-                            opt from this
-                          </button>
-                        )}
-                        {allowLLC && (
-                          <button
-                            onClick={() => handleAddPass(irWin.id, "llc")}
-                            style={{
-                              padding: "6px 10px",
-                              backgroundColor: "#add8e6",
-                              border: "none",
-                              borderRadius: "5px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                              fontSize: "0.65em",
-                              whiteSpace: "nowrap",
-                              minHeight: "32px",
-                              flexShrink: 0,
-                            }}
-                          >
-                            llc from this
-                          </button>
-                        )}
-                        {allowUserTool && (
-                          <button
-                            onClick={() =>
-                              handleAddPass(irWin.id, "user-tool")
-                            }
-                            style={{
-                              padding: "6px 10px",
-                              backgroundColor: "#add8e6",
-                              border: "none",
-                              borderRadius: "5px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                              fontSize: "0.65em",
-                              whiteSpace: "nowrap",
-                              minHeight: "32px",
-                              flexShrink: 0,
-                            }}
-                          >
-                            %your tool% in $PATH from this
-                          </button>
-                        )}
+                  return (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        marginBottom: "10px",
+                        alignItems: "center",
+                      }}
+                    >
+                      {allowTorchMlirOpt && (
                         <button
                           onClick={() =>
-                            setIrWindows((prev) =>
-                              prev.map((w) =>
-                                w.id === irWin.id
-                                  ? {
-                                      ...w,
-                                      dumpAfterEachOpt: !w.dumpAfterEachOpt,
-                                    }
-                                  : w
-                              )
-                            )
+                            handleAddPass(irWin.id, "torch-mlir-opt")
                           }
                           style={{
                             padding: "6px 10px",
-                            backgroundColor: irWin.dumpAfterEachOpt
-                              ? "#5fa"
-                              : "#ccc",
+                            backgroundColor: "#add8e6",
                             border: "none",
                             borderRadius: "5px",
                             fontWeight: "bold",
@@ -769,103 +656,267 @@ export default function PyTorchTritonExplorer() {
                             flexShrink: 0,
                           }}
                         >
-                          {irWin.dumpAfterEachOpt
-                            ? "✓ Print IR after opts"
-                            : "Print IR after opts"}
+                          torch-mlir-opt from this
                         </button>
-                      </div>
-                    );
-                  })()}
+                      )}
+                      {allowMlirOpt && (
+                        <button
+                          onClick={() => handleAddPass(irWin.id, "mlir-opt")}
+                          style={{
+                            padding: "6px 10px",
+                            backgroundColor: "#add8e6",
+                            border: "none",
+                            borderRadius: "5px",
+                            fontWeight: "bold",
+                            cursor: "pointer",
+                            fontSize: "0.65em",
+                            whiteSpace: "nowrap",
+                            minHeight: "32px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          mlir-opt from this
+                        </button>
+                      )}
+                      {allowMlirTranslate && (
+                        <button
+                          onClick={() =>
+                            handleAddPass(irWin.id, "mlir-translate")
+                          }
+                          style={{
+                            padding: "6px 10px",
+                            backgroundColor: "#add8e6",
+                            border: "none",
+                            borderRadius: "5px",
+                            fontWeight: "bold",
+                            cursor: "pointer",
+                            fontSize: "0.65em",
+                            whiteSpace: "nowrap",
+                            minHeight: "32px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          mlir-translate from this
+                        </button>
+                      )}
+                      {allowTritonOpt && (
+                        <button
+                          onClick={() => handleAddPass(irWin.id, "triton-opt")}
+                          style={{
+                            padding: "6px 10px",
+                            backgroundColor: "#add8e6",
+                            border: "none",
+                            borderRadius: "5px",
+                            fontWeight: "bold",
+                            cursor: "pointer",
+                            fontSize: "0.65em",
+                            whiteSpace: "nowrap",
+                            minHeight: "32px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          triton-opt from this
+                        </button>
+                      )}
+                      {allowTritonLLVMOpt && (
+                        <button
+                          onClick={() =>
+                            handleAddPass(irWin.id, "triton-llvm-opt")
+                          }
+                          style={{
+                            padding: "6px 10px",
+                            backgroundColor: "#add8e6",
+                            border: "none",
+                            borderRadius: "5px",
+                            fontWeight: "bold",
+                            cursor: "pointer",
+                            fontSize: "0.65em",
+                            whiteSpace: "nowrap",
+                            minHeight: "32px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          triton-llvm-opt from this
+                        </button>
+                      )}
+                      {allowLlvmOpt && (
+                        <button
+                          onClick={() => handleAddPass(irWin.id, "opt")}
+                          style={{
+                            padding: "6px 10px",
+                            backgroundColor: "#add8e6",
+                            border: "none",
+                            borderRadius: "5px",
+                            fontWeight: "bold",
+                            cursor: "pointer",
+                            fontSize: "0.65em",
+                            whiteSpace: "nowrap",
+                            minHeight: "32px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          opt from this
+                        </button>
+                      )}
+                      {allowLLC && (
+                        <button
+                          onClick={() => handleAddPass(irWin.id, "llc")}
+                          style={{
+                            padding: "6px 10px",
+                            backgroundColor: "#add8e6",
+                            border: "none",
+                            borderRadius: "5px",
+                            fontWeight: "bold",
+                            cursor: "pointer",
+                            fontSize: "0.65em",
+                            whiteSpace: "nowrap",
+                            minHeight: "32px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          llc from this
+                        </button>
+                      )}
+                      {allowUserTool && (
+                        <button
+                          onClick={() => handleAddPass(irWin.id, "user-tool")}
+                          style={{
+                            padding: "6px 10px",
+                            backgroundColor: "#add8e6",
+                            border: "none",
+                            borderRadius: "5px",
+                            fontWeight: "bold",
+                            cursor: "pointer",
+                            fontSize: "0.65em",
+                            whiteSpace: "nowrap",
+                            minHeight: "32px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          %your tool% in $PATH from this
+                        </button>
+                      )}
+                      <button
+                        onClick={() =>
+                          setIrWindows((prev) =>
+                            prev.map((w) =>
+                              w.id === irWin.id
+                                ? {
+                                    ...w,
+                                    dumpAfterEachOpt: !w.dumpAfterEachOpt,
+                                  }
+                                : w,
+                            ),
+                          )
+                        }
+                        style={{
+                          padding: "6px 10px",
+                          backgroundColor: irWin.dumpAfterEachOpt
+                            ? "#5fa"
+                            : "#ccc",
+                          border: "none",
+                          borderRadius: "5px",
+                          fontWeight: "bold",
+                          cursor: "pointer",
+                          fontSize: "0.65em",
+                          whiteSpace: "nowrap",
+                          minHeight: "32px",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {irWin.dumpAfterEachOpt
+                          ? "✓ Print IR after opts"
+                          : "Print IR after opts"}
+                      </button>
+                    </div>
+                  );
+                })()}
 
-                {(selectedLanguage === "pytorch" ||
-                  selectedLanguage == "raw_ir") &&
-                  irWin.pipeline.length > 0 && (
+                {irWin.pipeline.length > 0 && (
+                  <div
+                    style={{
+                      marginBottom: "10px",
+                      backgroundColor: "#eef",
+                      padding: "6px",
+                      borderRadius: "6px",
+                      fontSize: "0.95em",
+                    }}
+                  >
                     <div
                       style={{
                         marginBottom: "10px",
-                        backgroundColor: "#eef",
-                        padding: "6px",
+                        backgroundColor: "#eee",
+                        padding: "6px 10px",
                         borderRadius: "6px",
                         fontSize: "0.95em",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: "6px",
                       }}
                     >
-                      <div
+                      <span
                         style={{
-                          marginBottom: "10px",
-                          backgroundColor: "#eee",
-                          padding: "6px 10px",
-                          borderRadius: "6px",
-                          fontSize: "0.95em",
-                          display: "flex",
-                          flexWrap: "wrap",
-                          alignItems: "center",
-                          gap: "6px",
+                          backgroundColor: "#ccc",
+                          padding: "2px 8px",
+                          borderRadius: "4px",
+                          fontWeight: "bold",
                         }}
                       >
-                        <span
-                          style={{
-                            backgroundColor: "#ccc",
-                            padding: "2px 8px",
-                            borderRadius: "4px",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          Compilation pipeline:
-                        </span>
+                        Compilation pipeline:
+                      </span>
 
-                        <span
-                          style={{
-                            backgroundColor: "#ffeb3b",
-                            padding: "2px 8px",
-                            borderRadius: "4px",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          {getLabelForIR(irWin.selectedIR)}
-                        </span>
-                        {irWin.pipeline.map((p, i) => {
-                          const preview =
-                            p.flags.length <= 25
-                              ? p.flags
-                              : `${p.flags.slice(0, 15)}...${p.flags.slice(-10)}`;
-                          return (
-                            <React.Fragment key={i}>
+                      <span
+                        style={{
+                          backgroundColor: "#ffeb3b",
+                          padding: "2px 8px",
+                          borderRadius: "4px",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {getLabelForIR(irWin.selectedIR)}
+                      </span>
+                      {irWin.pipeline.map((p, i) => {
+                        const preview =
+                          p.flags.length <= 25
+                            ? p.flags
+                            : `${p.flags.slice(0, 15)}...${p.flags.slice(-10)}`;
+                        return (
+                          <React.Fragment key={i}>
+                            <span style={{ fontSize: "1.2em", color: "#666" }}>
+                              →
+                            </span>
+                            <span
+                              onClick={() =>
+                                handleEditPass(irWin.id, i, p.tool, p.flags)
+                              }
+                              style={{
+                                backgroundColor: "#a5d6a7",
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                display: "flex",
+                                flexDirection: "column",
+                                lineHeight: "1.2em",
+                              }}
+                            >
+                              <span>{p.tool}</span>
                               <span
-                                style={{ fontSize: "1.2em", color: "#666" }}
-                              >
-                                →
-                              </span>
-                              <span
-                                onClick={() =>
-                                  handleEditPass(irWin.id, i, p.tool, p.flags)
-                                }
                                 style={{
-                                  backgroundColor: "#a5d6a7",
-                                  padding: "2px 8px",
-                                  borderRadius: "4px",
-                                  cursor: "pointer",
-                                  fontWeight: "bold",
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  lineHeight: "1.2em",
+                                  fontSize: "0.8em",
+                                  color: "#555",
                                 }}
                               >
-                                <span>{p.tool}</span>
-                                <span
-                                  style={{
-                                    fontSize: "0.8em",
-                                    color: "#555",
-                                  }}
-                                >
-                                  {preview}
-                                </span>
+                                {preview}
                               </span>
-                            </React.Fragment>
-                          );
-                        })}
-                      </div>
+                            </span>
+                          </React.Fragment>
+                        );
+                      })}
                     </div>
-                  )}
+                  </div>
+                )}
 
                 <button
                   onClick={() => generateIR(irWin.id)}

@@ -21,7 +21,7 @@ example_input = torch.randn(4, 4)
 
 
 @pytest.mark.parametrize("ir_type", ["llvm_mlir"])
-def test_custom_pipeline(ir_type):
+def test_torch_custom_pipeline(ir_type):
     payload = {
         "code": pytorch_code,
         "ir_type": ir_type,

@@ -4,7 +4,7 @@ import httpx
 API_URL = "http://localhost:8000/generate_ir"
 
 
-def test_simple_conv2d_model():
+def test_torch_mlir_conv2d():
     code = """
 import torch
 import torch.nn as nn

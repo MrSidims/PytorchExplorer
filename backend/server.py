@@ -43,6 +43,7 @@ cached_triton_runs = {}
 
 TORCH_MLIR_OPT_PATH = os.environ.get("TORCH_MLIR_OPT_PATH", "")
 LLVM_BIN_PATH = os.environ.get("LLVM_BIN_PATH", "")
+TRITON_OPT_PATH = os.environ.get("TRITON_OPT_PATH", "")
 
 
 class CodeRequest(BaseModel):
@@ -55,6 +56,8 @@ class CodeRequest(BaseModel):
     mlir_translate: Optional[str] = ""
     llvm_opt: Optional[str] = ""
     llc: Optional[str] = ""
+    triton_opt: Optional[str] = ""
+    triton_llvm_opt: Optional[str] = ""
     user_tool: Optional[str] = ""
     dump_after_each_opt: Optional[bool] = False
 
@@ -156,6 +159,10 @@ def apply_optional_passes(
             tool_path = LLVM_BIN_PATH + "opt"
         elif tool == "llc":
             tool_path = LLVM_BIN_PATH + "llc"
+        elif tool == "triton-opt":
+            tool_path = TRITON_OPT_PATH + "triton-opt"
+        elif tool == "triton-llvm-opt":
+            tool_path = TRITON_OPT_PATH + "triton-llvm-opt"
         elif tool == "user-tool":
             tokens = flags.strip().split()
             if not tokens:
@@ -341,7 +348,9 @@ def generate_llvm_ir(
 
 
 # TODO: Figure out static compilation.
-def compile_triton_ir(code: str, ir_type: str) -> str:
+def compile_triton_ir(
+    code: str, ir_type: str, pipeline: List[Tuple[str, str]], dump_each: bool
+) -> str:
     try:
         code_hash = hash_code(code)
         cache_info = cached_triton_runs.get(code_hash)
@@ -403,7 +412,8 @@ def compile_triton_ir(code: str, ir_type: str) -> str:
 
         cached_triton_runs[code_hash]["active_users"] += 1
 
-        return "\n\n".join(output_parts)
+        ir_dump = "\n\n".join(output_parts)
+        return apply_optional_passes(ir_dump, pipeline, dump_each)
 
     except Exception as e:
         return f"Error compiling Triton IR: {str(e)}"
@@ -427,6 +437,12 @@ def build_pipeline(request: CodeRequest) -> List[Tuple[str, str]]:
     if request.llc:
         for stage in request.llc.split("&&"):
             pipeline.append(("llc", stage.strip()))
+    if request.llc:
+        for stage in request.triton_opt.split("&&"):
+            pipeline.append(("triton_opt", stage.strip()))
+    if request.llc:
+        for stage in request.triton_llvm_opt.split("&&"):
+            pipeline.append(("triton_llvm_opt", stage.strip()))
     if request.user_tool:
         for stage in request.user_tool.split("&&"):
             pipeline.append(("user-tool", stage.strip()))
@@ -437,7 +453,10 @@ def build_pipeline(request: CodeRequest) -> List[Tuple[str, str]]:
 def process_model(request: CodeRequest) -> str:
     try:
         if request.ir_type.startswith("triton"):
-            return compile_triton_ir(request.code, request.ir_type)
+            pipeline = build_pipeline(request)
+            return compile_triton_ir(
+                request.code, request.ir_type, pipeline, request.dump_after_each_opt
+            )
 
         if request.ir_type == "raw_ir" and request.selected_language == "pytorch":
             # Execute user Python, capture stdout.
