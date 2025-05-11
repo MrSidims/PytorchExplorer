@@ -1,33 +1,22 @@
-# FIXME: remove imports used on previous stages of development.
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional, Tuple
-
-import torch
-import torch.nn as nn
-from torch_mlir import fx
-from torch_mlir.compiler_utils import run_pipeline_with_repro_report
-from torch_mlir.fx import OutputType
-
 import subprocess
 import tempfile
-import triton
-import triton.language as tl
-import triton.compiler
-import ast
-import inspect
 import os
 import glob
 import uuid
 import hashlib
 import shutil
 import atexit
-import shutil
-
-import io
-import sys
+from typing import List, Optional, Tuple
 from contextlib import redirect_stdout, redirect_stderr
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+import torch
+import torch.nn as nn
+from torch_mlir import fx
+from torch_mlir.fx import OutputType
 
 app = FastAPI()
 
