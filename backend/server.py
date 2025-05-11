@@ -28,7 +28,9 @@ import shutil
 import io
 import sys
 from contextlib import redirect_stdout, redirect_stderr
+import logging
 
+logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(levelname)s - %(message)s")
 app = FastAPI()
 
 app.add_middleware(
@@ -123,7 +125,8 @@ def run_external_opt_tool_file(
         result = subprocess.run(args, capture_output=True, text=True)
         return (result.returncode == 0, result.stderr if result.stderr else "")
     except Exception as e:
-        return (False, f"Error running {tool}: {str(e)}")
+        logging.error(f"Error running {tool}: {str(e)}")
+        return (False, "An internal error occurred while running the tool.")
 
 
 # Utility for custom pipeline.
@@ -181,7 +184,8 @@ def apply_optional_passes(
             prev_path, flags, tool_path, out_path
         )
         if not success:
-            output += f"\n\n===== {tool} failed =====\n{stderr}"
+            logging.error(f"{tool} failed with error: {stderr}")
+            output += "\n\n===== An internal error occurred while processing the tool. ====="
             break
 
         if dump_each:
@@ -211,7 +215,8 @@ def generate_torch_script_graph_ir(model, example_input, pipeline, dump_each):
         traced_model = torch.jit.trace(model, example_input)
         return apply_optional_passes(str(traced_model.graph), pipeline, dump_each)
     except Exception as e:
-        return f"Error generating TorchScript Graph IR: {str(e)}"
+        logging.error(f"Error generating TorchScript Graph IR: {str(e)}")
+        return "An internal error occurred while generating the TorchScript Graph IR."
 
 
 # Torch MLIR dialect.
@@ -476,7 +481,8 @@ def process_model(request: CodeRequest) -> str:
                     captured, build_pipeline(request), request.dump_after_each_opt
                 )
             except Exception as e:
-                return f"Error executing user code: {str(e)}"
+                logging.error(f"Error executing user code: {str(e)}")
+                return "An internal error occurred while executing the user code."
 
         if request.ir_type == "raw_ir":
             return apply_optional_passes(
