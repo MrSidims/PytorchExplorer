@@ -39,7 +39,7 @@ def test_torch_custom_pipeline(ir_type):
     output = response.json()["output"]
 
     assert "===== Initial IR =====" in output
-    assert "llvm.func @main(%arg0: !llvm.ptr, %arg1: !llvm.ptr, %arg2: i64, %arg3: i64, %arg4: i64, %arg5: i64, %arg6: i64)"
+    assert "llvm.func @main(%arg0: !llvm.ptr, %arg1: !llvm.ptr, %arg2: i64, %arg3: i64, %arg4: i64, %arg5: i64, %arg6: i64)" in output
     assert "===== IR after mlir-translate --mlir-to-llvmir =====" in output
     assert "define { ptr, ptr, i64, [2 x i64], [2 x i64] } @main" in output
     assert "===== IR after llc -mtriple=nvptx64 =====" in output
