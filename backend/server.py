@@ -7,6 +7,8 @@ import hashlib
 import shutil
 import atexit
 from typing import List, Optional, Tuple
+import re
+
 from contextlib import redirect_stdout, redirect_stderr
 
 from fastapi import FastAPI
@@ -102,13 +104,19 @@ def fix_input(input_obj):
         return input_obj[0]
     return input_obj
 
+def split_cmd_arguments(cmd: str) -> List[str]:
+    # Split the command string into arguments, handling quoted strings.
+    cmd_split = re.split(r''' (?=(?:[^'"]|'[^']*'|"[^"]*")*$)''', cmd.strip())
+    # Remove quotes from each argument.
+    cmd_split = [arg.replace('"', "").replace("'", "") for arg in cmd_split]
+    return cmd_split
 
 # Run torch-mlir-opt and/or mlir-opt and/or opt etc.
 def run_external_opt_tool_file(
     input_path: str, cmd: str, tool: str, output_path: str
 ) -> Tuple[bool, str]:
     try:
-        args = [tool] + cmd.split() + [input_path, "-o", output_path]
+        args = [tool] + split_cmd_arguments(cmd) + [input_path, "-o", output_path]
         result = subprocess.run(args, capture_output=True, text=True)
         return (result.returncode == 0, result.stderr if result.stderr else "")
     except Exception as e:
@@ -153,7 +161,7 @@ def apply_optional_passes(
         elif tool == "triton-llvm-opt":
             tool_path = TRITON_OPT_PATH + "triton-llvm-opt"
         elif tool == "user-tool":
-            tokens = flags.strip().split()
+            tokens = split_cmd_arguments(flags)
             if not tokens:
                 output += "\n\n===== Empty user-tool invocation ====="
                 continue
