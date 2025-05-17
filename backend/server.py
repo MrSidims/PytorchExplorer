@@ -576,7 +576,7 @@ def generate_ir(request: CodeRequest):
         return {"status": "ok", "output": output}
     except IRGenerationError as e:
         logger.warning(f"IR generation failed: {e}")
-        return {"status": "error", "message": str(e), "detail": None}
+        return {"status": "error", "message": "IR generation failed", "detail": None}
     except Exception as e:
         logger.exception("Unexpected internal error")
         return {"status": "error", "message": "Internal backend error", "detail": None}
