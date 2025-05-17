@@ -908,21 +908,59 @@ export default function PyTorchTritonExplorer() {
                             </div>
                           </div>
                         )}
-                        <button
-                          onClick={() => generateIR(irWin.id)}
+                        <div
                           style={{
+                            display: "flex",
+                            gap: "6px",
                             marginBottom: "6px",
-                            padding: "4px",
-                            backgroundColor: "#5fa",
-                            border: "none",
-                            borderRadius: "5px",
-                            fontWeight: "bold",
-                            cursor: "pointer",
                           }}
-                          disabled={irWin.loading}
                         >
-                          {irWin.loading ? "Generating..." : "Generate IR"}
-                        </button>
+                          <button
+                            onClick={() => generateIR(irWin.id)}
+                            style={{
+                              flex: 3,
+                              padding: "4px",
+                              backgroundColor: "#5fa",
+                              border: "none",
+                              borderRadius: "5px",
+                              fontWeight: "bold",
+                              cursor: "pointer",
+                            }}
+                            disabled={irWin.loading}
+                          >
+                            {irWin.loading ? "Generating..." : "Generate IR"}
+                          </button>
+
+                          <button
+                            onClick={() =>
+                              setIrWindows((ws) =>
+                                ws.map((w) =>
+                                  w.id === irWin.id
+                                    ? {
+                                        ...w,
+                                        dumpAfterEachOpt: !w.dumpAfterEachOpt,
+                                      }
+                                    : w,
+                                ),
+                              )
+                            }
+                            style={{
+                              flex: 1,
+                              padding: "4px",
+                              backgroundColor: irWin.dumpAfterEachOpt
+                                ? "#5fa"
+                                : "#ccc",
+                              border: "none",
+                              borderRadius: "5px",
+                              fontWeight: "bold",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {irWin.dumpAfterEachOpt
+                              ? "✓ Print IR after opts"
+                              : "Print IR after opts"}
+                          </button>
+                        </div>
                         <Editor
                           height="70vh"
                           language="mlir"
