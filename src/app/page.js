@@ -344,9 +344,15 @@ export default function PyTorchTritonExplorer() {
 
     const data = await response.json();
     setIrWindows((prev) =>
-      prev.map((w) =>
-        w.id === id ? { ...w, output: data.output, loading: false } : w,
-      ),
+      prev.map((w) => {
+        if (w.id !== id) return w;
+        if (data.status === "ok") {
+          return { ...w, output: data.output, loading: false };
+        } else {
+          const errText = `${data.message}${data.detail ? "\n\n" + data.detail : ""}`;
+          return { ...w, output: errText, loading: false };
+        }
+      }),
     );
   };
 

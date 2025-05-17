@@ -16,3 +16,6 @@ class TritonExecutionError(IRGenerationError):
 
 class CompilerPipelineError(IRGenerationError):
     """Raised when running compiler tools (opt, translate, etc) fails."""
+
+    def __init__(self, msg):
+        super().__init__(msg)
