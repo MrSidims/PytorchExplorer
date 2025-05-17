@@ -7,6 +7,7 @@ import hashlib
 import shutil
 import atexit
 import logging
+import traceback
 from typing import List, Optional, Tuple
 import re
 
@@ -117,12 +118,14 @@ def fix_input(input_obj):
         return input_obj[0]
     return input_obj
 
+
 def split_cmd_arguments(cmd: str) -> List[str]:
     # Split the command string into arguments, handling quoted strings.
     cmd_split = re.split(r''' (?=(?:[^'"]|'[^']*'|"[^"]*")*$)''', cmd.strip())
     # Remove quotes from each argument.
     cmd_split = [arg.replace('"', "").replace("'", "") for arg in cmd_split]
     return cmd_split
+
 
 # Run torch-mlir-opt and/or mlir-opt and/or opt etc.
 def run_external_opt_tool_file(
@@ -133,8 +136,8 @@ def run_external_opt_tool_file(
         result = subprocess.run(args, capture_output=True, text=True)
         return (result.returncode == 0, result.stderr if result.stderr else "")
     except Exception as e:
-        logger.error(f"Failed to run tool '{tool}': {e}")
-        raise CompilerPipelineError(f"Failed to run compiler tool '{tool}'")
+        logger.error(f"Failed to run tool '{tool}': {e}", exc_info=True)
+        raise CompilerPipelineError(f"Failed to run compiler tool '{tool}' : {e}")
 
 
 # Utility for custom pipeline.
@@ -551,7 +554,9 @@ def process_model(request: CodeRequest) -> str:
 
     except Exception as e:
         logger.exception("Unhandled error in process_model")
-        raise IRGenerationError("Unhandled exception while processing request.")
+        raise IRGenerationError(
+            f"Unhandled exception while processing request: {e}"
+        ) from e
 
 
 @app.post("/free_ir_cache")
@@ -583,8 +588,17 @@ def generate_ir(request: CodeRequest):
         output = process_model(request)
         return {"status": "ok", "output": output}
     except IRGenerationError as e:
-        logger.warning(f"IR generation failed: {e}")
-        return {"status": "error", "message": "IR generation failed", "detail": None}
+        tb = traceback.format_exc()
+        return {
+            "status": "error",
+            "message": str(e),
+            "detail": tb,
+        }
     except Exception as e:
-        logger.exception("Unexpected internal error")
-        return {"status": "error", "message": "Internal backend error", "detail": None}
+        tb = traceback.format_exc()
+        logger.error("Unexpected internal error:\n%s", tb)
+        return {
+            "status": "error",
+            "message": "Internal backend error",
+            "detail": tb,
+        }
