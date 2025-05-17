@@ -446,12 +446,12 @@ def build_pipeline(request: CodeRequest) -> List[Tuple[str, str]]:
     if request.llc:
         for stage in request.llc.split("&&"):
             pipeline.append(("llc", stage.strip()))
-    if request.llc:
+    if request.triton_opt:
         for stage in request.triton_opt.split("&&"):
-            pipeline.append(("triton_opt", stage.strip()))
-    if request.llc:
+            pipeline.append(("triton-opt", stage.strip()))
+    if request.triton_llvm_opt:
         for stage in request.triton_llvm_opt.split("&&"):
-            pipeline.append(("triton_llvm_opt", stage.strip()))
+            pipeline.append(("triton-llvm-opt", stage.strip()))
     if request.user_tool:
         for stage in request.user_tool.split("&&"):
             pipeline.append(("user-tool", stage.strip()))
