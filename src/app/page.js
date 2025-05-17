@@ -4,6 +4,7 @@ import React from "react";
 import { useState, useEffect } from "react";
 import Editor, { loader } from "@monaco-editor/react";
 import { ConfigProvider, Splitter } from "antd";
+import { Collapse, Input } from "antd";
 
 const defaultPyTorchCode = `import torch
 import torch.nn as nn
@@ -109,16 +110,13 @@ export default function PyTorchTritonExplorer() {
     },
   ]);
   const [globalLoading, setGlobalLoading] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [currentWindowId, setCurrentWindowId] = useState(null);
-  const [currentTool, setCurrentTool] = useState("");
-  const [currentFlags, setCurrentFlags] = useState("");
   const [editPassWindowId, setEditPassWindowId] = useState(null);
   const [editPassIndex, setEditPassIndex] = useState(null);
   const [editTool, setEditTool] = useState("");
   const [editFlags, setEditFlags] = useState("");
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [layout, setLayout] = useState("vertical");
+  const [customToolCmd, setCustomToolCmd] = useState("");
 
   const isTriton = selectedLanguage === "triton";
   const isPytorch = selectedLanguage === "pytorch";
@@ -180,21 +178,14 @@ export default function PyTorchTritonExplorer() {
     }
   };
 
-  const handleSubmitFlags = () => {
-    setIrWindows((prev) =>
-      prev.map((w) =>
-        w.id === currentWindowId
-          ? {
-              ...w,
-              pipeline: [
-                ...w.pipeline,
-                { tool: currentTool, flags: currentFlags },
-              ],
-            }
+  const handleAddCustomTool = (windowId, flags) => {
+    setIrWindows((ws) =>
+      ws.map((w) =>
+        w.id === windowId
+          ? { ...w, pipeline: [...w.pipeline, { tool: "user-tool", flags }] }
           : w,
       ),
     );
-    setModalVisible(false);
   };
 
   const handleEditPass = (windowId, index, tool, flags) => {
@@ -609,6 +600,7 @@ export default function PyTorchTritonExplorer() {
                           ))}
                         </select>
                         {(() => {
+                          // determine which built-in tool buttons to show
                           const allowTorchMlirOpt = [
                             "torch_script_graph_ir",
                             "torch_mlir",
@@ -637,134 +629,167 @@ export default function PyTorchTritonExplorer() {
                             irWin.selectedIR !== "triton_nvptx";
                           const allowLLC = allowLlvmOpt;
                           const allowUserTool = true;
+
+                          // if nothing at all is allowed, skip
                           if (
                             !allowTorchMlirOpt &&
                             !allowMlirOpt &&
                             !allowMlirTranslate &&
+                            !allowTritonOpt &&
+                            !allowTritonLLVMOpt &&
                             !allowLlvmOpt &&
+                            !allowLLC &&
                             !allowUserTool
-                          )
+                          ) {
                             return null;
+                          }
+
                           return (
-                            <div
-                              style={{
-                                display: "flex",
-                                gap: "8px",
-                                marginBottom: "8px",
-                                alignItems: "center",
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              {allowTorchMlirOpt && (
-                                <button
-                                  onClick={() =>
-                                    handleAddPass(irWin.id, "torch-mlir-opt")
-                                  }
-                                  className="tool-btn"
-                                >
-                                  torch-mlir-opt from this
-                                </button>
-                              )}
-                              {allowMlirOpt && (
-                                <button
-                                  onClick={() =>
-                                    handleAddPass(irWin.id, "mlir-opt")
-                                  }
-                                  className="tool-btn"
-                                >
-                                  mlir-opt from this
-                                </button>
-                              )}
-                              {allowMlirTranslate && (
-                                <button
-                                  onClick={() =>
-                                    handleAddPass(irWin.id, "mlir-translate")
-                                  }
-                                  className="tool-btn"
-                                >
-                                  mlir-translate from this
-                                </button>
-                              )}
-                              {allowTritonOpt && (
-                                <button
-                                  onClick={() =>
-                                    handleAddPass(irWin.id, "triton-opt")
-                                  }
-                                  className="tool-btn"
-                                >
-                                  triton-opt from this
-                                </button>
-                              )}
-                              {allowTritonLLVMOpt && (
-                                <button
-                                  onClick={() =>
-                                    handleAddPass(irWin.id, "triton-llvm-opt")
-                                  }
-                                  className="tool-btn"
-                                >
-                                  triton-llvm-opt from this
-                                </button>
-                              )}
-                              {allowLlvmOpt && (
-                                <button
-                                  onClick={() => handleAddPass(irWin.id, "opt")}
-                                  className="tool-btn"
-                                >
-                                  opt from this
-                                </button>
-                              )}
-                              {allowLLC && (
-                                <button
-                                  onClick={() => handleAddPass(irWin.id, "llc")}
-                                  className="tool-btn"
-                                >
-                                  llc from this
-                                </button>
-                              )}
-                              {allowUserTool && (
-                                <button
-                                  onClick={() =>
-                                    handleAddPass(irWin.id, "user-tool")
-                                  }
-                                  className="tool-btn"
-                                >
-                                  %your tool% in $PATH from this
-                                </button>
-                              )}
-                              <button
-                                onClick={() =>
-                                  setIrWindows((prev) =>
-                                    prev.map((w) =>
-                                      w.id === irWin.id
-                                        ? {
-                                            ...w,
-                                            dumpAfterEachOpt:
-                                              !w.dumpAfterEachOpt,
-                                          }
-                                        : w,
+                            <>
+                              {/* collapsible toolbar */}
+                              <Collapse
+                                defaultActiveKey={["1"]}
+                                style={{ marginBottom: "10px" }}
+                                items={[
+                                  {
+                                    key: "tools",
+                                    label: (
+                                      <span
+                                        style={{
+                                          fontSize: "0.85rem",
+                                          padding: "4px 8px",
+                                        }}
+                                      >
+                                        Use predefined toolbar
+                                      </span>
                                     ),
-                                  )
+                                    children: (
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          flexWrap: "wrap",
+                                          gap: "20px",
+                                        }}
+                                      >
+                                        {allowTorchMlirOpt && (
+                                          <button
+                                            onClick={() =>
+                                              handleAddPass(
+                                                irWin.id,
+                                                "torch-mlir-opt",
+                                              )
+                                            }
+                                            className="tool-btn"
+                                          >
+                                            torch-mlir-opt
+                                          </button>
+                                        )}
+                                        {allowMlirOpt && (
+                                          <button
+                                            onClick={() =>
+                                              handleAddPass(
+                                                irWin.id,
+                                                "mlir-opt",
+                                              )
+                                            }
+                                            className="tool-btn"
+                                          >
+                                            mlir-opt
+                                          </button>
+                                        )}
+                                        {allowMlirTranslate && (
+                                          <button
+                                            onClick={() =>
+                                              handleAddPass(
+                                                irWin.id,
+                                                "mlir-translate",
+                                              )
+                                            }
+                                            className="tool-btn"
+                                          >
+                                            mlir-translate
+                                          </button>
+                                        )}
+                                        {allowTritonOpt && (
+                                          <button
+                                            onClick={() =>
+                                              handleAddPass(
+                                                irWin.id,
+                                                "triton-opt",
+                                              )
+                                            }
+                                            className="tool-btn"
+                                          >
+                                            triton-opt
+                                          </button>
+                                        )}
+                                        {allowTritonLLVMOpt && (
+                                          <button
+                                            onClick={() =>
+                                              handleAddPass(
+                                                irWin.id,
+                                                "triton-llvm-opt",
+                                              )
+                                            }
+                                            className="tool-btn"
+                                          >
+                                            triton-llvm-opt
+                                          </button>
+                                        )}
+                                        {allowLlvmOpt && (
+                                          <button
+                                            onClick={() =>
+                                              handleAddPass(irWin.id, "opt")
+                                            }
+                                            className="tool-btn"
+                                          >
+                                            opt
+                                          </button>
+                                        )}
+                                        {allowLLC && (
+                                          <button
+                                            onClick={() =>
+                                              handleAddPass(irWin.id, "llc")
+                                            }
+                                            className="tool-btn"
+                                          >
+                                            llc
+                                          </button>
+                                        )}
+                                      </div>
+                                    ),
+                                  },
+                                ]}
+                              ></Collapse>
+
+                              {/* free-form tool command */}
+                              <Input
+                                placeholder="Call any tool in PATH + flags, e.g. `mlir-opt -convert-scf-to-cf` or `opt -O2 -S` and press `Enter`"
+                                // pick the cmd for this window, defaulting to ""
+                                value={customToolCmd[irWin.id] || ""}
+                                onChange={(e) =>
+                                  setCustomToolCmd((prev) => ({
+                                    ...prev,
+                                    [irWin.id]: e.target.value,
+                                  }))
                                 }
-                                style={{
-                                  padding: "6px 6px",
-                                  backgroundColor: irWin.dumpAfterEachOpt
-                                    ? "#5fa"
-                                    : "#ccc",
-                                  border: "none",
-                                  borderRadius: "5px",
-                                  fontWeight: "bold",
-                                  cursor: "pointer",
-                                  fontSize: "0.65em",
-                                  whiteSpace: "nowrap",
-                                  minHeight: "32px",
-                                  flexShrink: 0,
+                                onPressEnter={() => {
+                                  const flags = (
+                                    customToolCmd[irWin.id] || ""
+                                  ).trim();
+                                  if (!flags) return;
+                                  handleAddCustomTool(irWin.id, flags);
+                                  setCustomToolCmd((prev) => ({
+                                    ...prev,
+                                    [irWin.id]: "",
+                                  }));
                                 }}
-                              >
-                                {irWin.dumpAfterEachOpt
-                                  ? "✓ Print IR after opts"
-                                  : "Print IR after opts"}
-                              </button>
-                            </div>
+                                style={{
+                                  width: "100%",
+                                  marginBottom: "10px",
+                                }}
+                              />
+                            </>
                           );
                         })()}
                         {irWin.pipeline.length > 0 && (
@@ -844,14 +869,37 @@ export default function PyTorchTritonExplorer() {
                                         lineHeight: "1.2em",
                                       }}
                                     >
-                                      <span>{p.tool}</span>
                                       <span
+                                        onClick={() =>
+                                          handleEditPass(
+                                            irWin.id,
+                                            i,
+                                            p.tool,
+                                            p.flags,
+                                          )
+                                        }
                                         style={{
-                                          fontSize: "0.8em",
-                                          color: "#555",
+                                          backgroundColor: "#a5d6a7",
+                                          padding: "2px 8px",
+                                          borderRadius: "4px",
+                                          cursor: "pointer",
+                                          fontWeight: "bold",
+                                          display: "flex",
+                                          flexDirection: "column",
+                                          lineHeight: "1.2em",
                                         }}
                                       >
-                                        {preview}
+                                        {p.tool !== "user-tool" && (
+                                          <span>{p.tool}</span>
+                                        )}
+                                        <span
+                                          style={{
+                                            fontSize: "0.8em",
+                                            color: "#555",
+                                          }}
+                                        >
+                                          {preview}
+                                        </span>
                                       </span>
                                     </span>
                                   </React.Fragment>
