@@ -3,8 +3,7 @@
 import React from "react";
 import { useState, useEffect } from "react";
 import Editor, { loader } from "@monaco-editor/react";
-import { ConfigProvider, Splitter } from "antd";
-import { Collapse, Input } from "antd";
+import { ConfigProvider, Splitter, Collapse, Input, Tabs } from "antd";
 
 const defaultPyTorchCode = `import torch
 import torch.nn as nn
@@ -96,19 +95,38 @@ const tritonIROptions = [
 const rawIROptions = [{ value: "raw_ir", label: "Raw IR Output" }];
 
 export default function PyTorchTritonExplorer() {
-  const [selectedLanguage, setSelectedLanguage] = useState("pytorch");
-  const [code, setCode] = useState(defaultPyTorchCode);
-  const [irWindows, setIrWindows] = useState([
+  // Support multiple Source tabs, each with its own pipeline.
+  const [sources, setSources] = useState([
     {
       id: 1,
-      selectedIR: "torch_script_graph_ir",
-      output: "Select IR and Generate",
-      collapsed: false,
-      loading: false,
-      pipeline: [],
-      dumpAfterEachOpt: false,
+      name: "Source 1",
+      selectedLanguage: "pytorch",
+      code: defaultPyTorchCode,
+      irWindows: [
+        {
+          id: 1,
+          selectedIR: "torch_script_graph_ir",
+          output: "Select IR and Generate",
+          collapsed: false,
+          loading: false,
+          pipeline: [],
+          dumpAfterEachOpt: false,
+        },
+      ],
+      customToolCmd: {},
     },
   ]);
+  const [activeSourceId, setActiveSourceId] = useState(1);
+
+  function updateActiveSource(updater) {
+    setSources((srcs) =>
+      srcs.map((s) => (s.id === activeSourceId ? updater(s) : s)),
+    );
+  }
+
+  const activeSource = sources.find((s) => s.id === activeSourceId);
+  const { selectedLanguage, code, irWindows, customToolCmd } = activeSource;
+
   const [globalLoading, setGlobalLoading] = useState(false);
   const [editPassWindowId, setEditPassWindowId] = useState(null);
   const [editPassIndex, setEditPassIndex] = useState(null);
@@ -116,7 +134,6 @@ export default function PyTorchTritonExplorer() {
   const [editFlags, setEditFlags] = useState("");
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [layout, setLayout] = useState("vertical");
-  const [customToolCmd, setCustomToolCmd] = useState("");
 
   const isTriton = selectedLanguage === "triton";
   const isPytorch = selectedLanguage === "pytorch";
@@ -126,7 +143,6 @@ export default function PyTorchTritonExplorer() {
       if (!monaco) return;
 
       monaco.languages.register({ id: "mlir" });
-
       monaco.languages.setMonarchTokensProvider("mlir", {
         tokenizer: {
           root: [
@@ -168,24 +184,27 @@ export default function PyTorchTritonExplorer() {
   const handleAddPass = (id, tool) => {
     const flags = prompt(`Enter flags for ${tool}`);
     if (flags !== null) {
-      setIrWindows((prev) =>
-        prev.map((w) =>
+      updateActiveSource((s) => ({
+        ...s,
+        irWindows: s.irWindows.map((w) =>
           w.id === id
             ? { ...w, pipeline: [...w.pipeline, { tool, flags }] }
             : w,
         ),
-      );
+      }));
     }
   };
 
   const handleAddCustomTool = (windowId, flags) => {
-    setIrWindows((ws) =>
-      ws.map((w) =>
+    updateActiveSource((s) => ({
+      ...s,
+      irWindows: s.irWindows.map((w) =>
         w.id === windowId
           ? { ...w, pipeline: [...w.pipeline, { tool: "user-tool", flags }] }
           : w,
       ),
-    );
+      customToolCmd: { ...s.customToolCmd, [windowId]: flags },
+    }));
   };
 
   const handleEditPass = (windowId, index, tool, flags) => {
@@ -197,108 +216,118 @@ export default function PyTorchTritonExplorer() {
   };
 
   const handleUpdatePass = () => {
-    setIrWindows((prev) =>
-      prev.map((w) =>
-        w.id === editPassWindowId
-          ? {
-              ...w,
-              pipeline: w.pipeline.map((p, i) =>
-                i === editPassIndex ? { tool: editTool, flags: editFlags } : p,
-              ),
-            }
-          : w,
+    updateActiveSource((s) => ({
+      ...s,
+      irWindows: s.irWindows.map((p, i) =>
+        i === editPassIndex ? { tool: editTool, flags: editFlags } : p,
       ),
-    );
+    }));
     setEditModalVisible(false);
   };
 
   const handleRemovePass = () => {
-    setIrWindows((prev) =>
-      prev.map((w) =>
-        w.id === editPassWindowId
-          ? { ...w, pipeline: w.pipeline.filter((_, i) => i !== editPassIndex) }
-          : w,
-      ),
-    );
+    updateActiveSource((s) => ({
+      ...s,
+      irWindows: s.irWindows.filter((_, i) => i !== editPassIndex),
+    }));
     setEditModalVisible(false);
   };
 
   const handleLanguageChange = (e) => {
     const lang = e.target.value;
-    setSelectedLanguage(lang);
     const defaultIR =
       lang === "pytorch"
         ? "torch_script_graph_ir"
         : lang === "triton"
           ? "triton_ir"
           : "raw_ir";
-
     const defaultCode =
       lang === "pytorch"
         ? defaultPyTorchCode
         : lang === "triton"
           ? defaultTritonCode
           : defaultRawIRCode;
-
-    setCode(defaultCode);
-    setIrWindows([
-      {
-        id: 1,
-        selectedIR: defaultIR,
-        output: "Select IR and Generate",
-        collapsed: false,
-        loading: false,
-        pipeline: [],
-      },
-    ]);
+    updateActiveSource((s) => ({
+      ...s,
+      selectedLanguage: lang,
+      code: defaultCode,
+      irWindows: [
+        {
+          id: 1,
+          selectedIR: defaultIR,
+          output: "Select IR and Generate",
+          collapsed: false,
+          loading: false,
+          pipeline: [],
+          dumpAfterEachOpt: false,
+        },
+      ],
+      customToolCmd: {},
+    }));
   };
 
   const addWindow = () => {
-    const nextId =
-      (irWindows.length ? Math.max(...irWindows.map((w) => w.id)) : 0) + 1;
-    setIrWindows([
-      ...irWindows,
-      {
-        id: nextId,
-        selectedIR: isTriton
-          ? "triton_ir"
-          : isPytorch
-            ? "torch_script_graph_ir"
-            : "raw_ir",
-        output: "Select IR and Generate",
-        collapsed: false,
-        loading: false,
-        pipeline: [],
-        dumpAfterEachOpt: false,
-      },
-    ]);
+    updateActiveSource((s) => {
+      const nextId = s.irWindows.length
+        ? Math.max(...s.irWindows.map((w) => w.id)) + 1
+        : 1;
+      return {
+        ...s,
+        irWindows: [
+          ...s.irWindows,
+          {
+            id: nextId,
+            selectedIR: isTriton
+              ? "triton_ir"
+              : isPytorch
+                ? "torch_script_graph_ir"
+                : "raw_ir",
+            output: "Select IR and Generate",
+            collapsed: false,
+            loading: false,
+            pipeline: [],
+            dumpAfterEachOpt: false,
+          },
+        ],
+      };
+    });
   };
 
   const removeWindow = (id) => {
-    setIrWindows(irWindows.filter((w) => w.id !== id));
+    updateActiveSource((s) => ({
+      ...s,
+      irWindows: s.irWindows.filter((w) => w.id !== id),
+    }));
   };
 
   const toggleCollapse = (id) => {
-    setIrWindows((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, collapsed: !w.collapsed } : w)),
-    );
+    updateActiveSource((s) => ({
+      ...s,
+      irWindows: s.irWindows.map((w) =>
+        w.id === id ? { ...w, collapsed: !w.collapsed } : w,
+      ),
+    }));
   };
 
   const handleIRChange = (id, event) => {
     const value = event.target.value;
-    setIrWindows((prev) =>
-      prev.map((w) =>
+    updateActiveSource((s) => ({
+      ...s,
+      irWindows: s.irWindows.map((w) =>
         w.id === id ? { ...w, selectedIR: value, pipeline: [] } : w,
       ),
-    );
+    }));
   };
 
   const generateIR = async (id) => {
-    setIrWindows((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, loading: true } : w)),
-    );
+    updateActiveSource((s) => ({
+      ...s,
+      irWindows: s.irWindows.map((w) =>
+        w.id === id ? { ...w, loading: true } : w,
+      ),
+    }));
 
-    const irWin = irWindows.find((w) => w.id === id);
+    const irWin = activeSource.irWindows.find((w) => w.id === id);
     if (!irWin) return;
 
     const body = {
@@ -343,17 +372,21 @@ export default function PyTorchTritonExplorer() {
     );
 
     const data = await response.json();
-    setIrWindows((prev) =>
-      prev.map((w) => {
-        if (w.id !== id) return w;
-        if (data.status === "ok") {
-          return { ...w, output: data.output, loading: false };
-        } else {
-          const errText = `${data.message}${data.detail ? "\n\n" + data.detail : ""}`;
-          return { ...w, output: errText, loading: false };
-        }
-      }),
-    );
+    updateActiveSource((s) => ({
+      ...s,
+      irWindows: s.irWindows.map((w) =>
+        w.id === id
+          ? {
+              ...w,
+              output:
+                data.status === "ok"
+                  ? data.output
+                  : `${data.message}${data.detail ? "\n\n" + data.detail : ""}`,
+              loading: false,
+            }
+          : w,
+      ),
+    }));
   };
 
   const generateAllIR = async () => {
@@ -372,6 +405,11 @@ export default function PyTorchTritonExplorer() {
     return found ? found.label : value;
   };
 
+  const sourceTabs = sources.map((src) => ({
+    label: src.name,
+    key: `${src.id}`,
+  }));
+
   return (
     <ConfigProvider
       theme={{
@@ -387,7 +425,9 @@ export default function PyTorchTritonExplorer() {
         layout="horizontal"
         lazy={false}
         style={{
-          height: "100vh",
+          height: "calc(100vh - 8px)",
+          margin: "4px 0",
+          boxSizing: "border-box",
           backgroundImage: "url('katze.png')",
           backgroundSize: "cover",
           backgroundPosition: "center",
@@ -395,12 +435,13 @@ export default function PyTorchTritonExplorer() {
         }}
       >
         {/* Left Panel */}
-        <Splitter.Panel collapsible>
+        <Splitter.Panel collapsible defaultSize="40%" min="200px">
           <div
             style={{
+              margin: "4px 0",
               display: "flex",
               flexDirection: "column",
-              height: "100%",
+              height: "98%",
               overflow: "hidden",
               backgroundColor: "white",
               opacity: 0.9,
@@ -408,49 +449,101 @@ export default function PyTorchTritonExplorer() {
               padding: "10px",
             }}
           >
-            {
-              <>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <h2 style={{ margin: 0 }}>Source Code</h2>
-                </div>
-                <select
-                  value={selectedLanguage}
-                  onChange={handleLanguageChange}
-                  style={{ margin: "10px 0" }}
-                >
-                  <option value="pytorch">PyTorch</option>
-                  <option value="raw_ir">Raw IR Input</option>
-                  <option value="triton">Triton (experimental support)</option>
-                </select>
-                <div
-                  style={{
-                    flex: "1 1 auto",
-                    overflow: "auto",
-                  }}
-                >
-                  <Editor
-                    height="100%"
-                    defaultLanguage="python"
-                    value={code}
-                    onChange={(value) => setCode(value)}
-                    theme="vs-light"
-                  />
-                </div>
-              </>
-            }
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <h2 style={{ margin: 0 }}>Source code tabs</h2>
+              <button
+                onClick={() => {
+                  const newId = sources.length + 1;
+                  setSources([
+                    ...sources,
+                    {
+                      id: newId,
+                      name: `Source ${newId}`,
+                      selectedLanguage: "pytorch",
+                      code: defaultPyTorchCode,
+                      irWindows: [
+                        {
+                          id: 1,
+                          selectedIR: "torch_script_graph_ir",
+                          output: "Select IR and Generate",
+                          collapsed: false,
+                          loading: false,
+                          pipeline: [],
+                          dumpAfterEachOpt: false,
+                        },
+                      ],
+                      customToolCmd: {},
+                    },
+                  ]);
+                  setActiveSourceId(newId);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "2px",
+                  fontSize: "0.7rem",
+                  height: "30px",
+                  backgroundColor: "#5fa",
+                  border: "none",
+                  borderRadius: "5px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                Add Source
+              </button>
+            </div>
+            <Tabs
+              activeKey={`${activeSourceId}`}
+              onChange={(key) => setActiveSourceId(Number(key))}
+              items={sourceTabs}
+              style={{ marginLeft: 16 }}
+            />
+
+            <select
+              value={selectedLanguage}
+              onChange={handleLanguageChange}
+              style={{ margin: "10px 0" }}
+            >
+              <option value="pytorch">PyTorch</option>
+              <option value="raw_ir">Raw IR Input</option>
+              <option value="triton">Triton (experimental support)</option>
+            </select>
+            <div
+              style={{
+                flex: "1 1 auto",
+                overflow: "auto",
+              }}
+            >
+              <Editor
+                height="100%"
+                defaultLanguage="python"
+                value={code}
+                onChange={(value) =>
+                  updateActiveSource((s) => ({ ...s, code: value || "" }))
+                }
+                theme="vs-light"
+              />
+            </div>
           </div>
         </Splitter.Panel>
 
         {/* Right Panel */}
-        <Splitter.Panel>
+        <Splitter.Panel defaultSize="60%" min="300px">
           <div
-            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              height: "100%",
+            }}
           >
             <div
               style={{
@@ -522,10 +615,12 @@ export default function PyTorchTritonExplorer() {
                 </button>
               </div>
             </div>
+            {/* IR windows container */}
             <div
               style={{
-                flex: "1 1 auto",
-                overflow: "auto",
+                flex: "1 1 0",
+                minHeight: 0,
+                overflowY: "auto",
                 padding: "0 10px 10px",
               }}
             >
@@ -535,6 +630,8 @@ export default function PyTorchTritonExplorer() {
                   flexDirection: layout === "vertical" ? "column" : "row",
                   flexWrap: layout === "horizontal" ? "wrap" : "nowrap",
                   gap: "6px",
+                  alignItems: "stretch",
+                  height: "100%",
                 }}
               >
                 {irWindows.map((irWin) => (
@@ -551,9 +648,11 @@ export default function PyTorchTritonExplorer() {
                       flex:
                         layout === "horizontal"
                           ? "1 1 calc(50% - 6px)"
-                          : "1 1 auto",
+                          : "0 0 auto",
                       minWidth: layout === "horizontal" ? "30%" : "auto",
+                      height: "100%",
                       boxSizing: "border-box",
+                      minHeight: 0,
                     }}
                   >
                     <div
@@ -561,6 +660,7 @@ export default function PyTorchTritonExplorer() {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
+                        marginBottom: "10px",
                       }}
                     >
                       <h3>Output {getLabelForIR(irWin.selectedIR)}</h3>
@@ -766,17 +866,18 @@ export default function PyTorchTritonExplorer() {
                                     ),
                                   },
                                 ]}
-                              ></Collapse>
-
+                              />
                               {/* free-form tool command */}
                               <Input
                                 placeholder="Call any tool in PATH + flags, e.g. `mlir-opt -convert-scf-to-cf` or `opt -O2 -S` and press `Enter`"
-                                // pick the cmd for this window, defaulting to ""
                                 value={customToolCmd[irWin.id] || ""}
                                 onChange={(e) =>
-                                  setCustomToolCmd((prev) => ({
-                                    ...prev,
-                                    [irWin.id]: e.target.value,
+                                  updateActiveSource((s) => ({
+                                    ...s,
+                                    customToolCmd: {
+                                      ...s.customToolCmd,
+                                      [irWin.id]: e.target.value,
+                                    },
                                   }))
                                 }
                                 onPressEnter={() => {
@@ -785,9 +886,12 @@ export default function PyTorchTritonExplorer() {
                                   ).trim();
                                   if (!flags) return;
                                   handleAddCustomTool(irWin.id, flags);
-                                  setCustomToolCmd((prev) => ({
-                                    ...prev,
-                                    [irWin.id]: "",
+                                  updateActiveSource((s) => ({
+                                    ...s,
+                                    customToolCmd: {
+                                      ...s.customToolCmd,
+                                      [irWin.id]: "",
+                                    },
                                   }));
                                 }}
                                 style={{
@@ -875,37 +979,16 @@ export default function PyTorchTritonExplorer() {
                                         lineHeight: "1.2em",
                                       }}
                                     >
+                                      {p.tool !== "user-tool" && (
+                                        <span>{p.tool}</span>
+                                      )}
                                       <span
-                                        onClick={() =>
-                                          handleEditPass(
-                                            irWin.id,
-                                            i,
-                                            p.tool,
-                                            p.flags,
-                                          )
-                                        }
                                         style={{
-                                          backgroundColor: "#a5d6a7",
-                                          padding: "2px 8px",
-                                          borderRadius: "4px",
-                                          cursor: "pointer",
-                                          fontWeight: "bold",
-                                          display: "flex",
-                                          flexDirection: "column",
-                                          lineHeight: "1.2em",
+                                          fontSize: "0.8em",
+                                          color: "#555",
                                         }}
                                       >
-                                        {p.tool !== "user-tool" && (
-                                          <span>{p.tool}</span>
-                                        )}
-                                        <span
-                                          style={{
-                                            fontSize: "0.8em",
-                                            color: "#555",
-                                          }}
-                                        >
-                                          {preview}
-                                        </span>
+                                        {preview}
                                       </span>
                                     </span>
                                   </React.Fragment>
@@ -936,11 +1019,11 @@ export default function PyTorchTritonExplorer() {
                           >
                             {irWin.loading ? "Generating..." : "Generate IR"}
                           </button>
-
                           <button
                             onClick={() =>
-                              setIrWindows((ws) =>
-                                ws.map((w) =>
+                              updateActiveSource((s) => ({
+                                ...s,
+                                irWindows: s.irWindows.map((w) =>
                                   w.id === irWin.id
                                     ? {
                                         ...w,
@@ -948,7 +1031,7 @@ export default function PyTorchTritonExplorer() {
                                       }
                                     : w,
                                 ),
-                              )
+                              }))
                             }
                             style={{
                               flex: 1,
@@ -967,14 +1050,22 @@ export default function PyTorchTritonExplorer() {
                               : "Print IR after opts"}
                           </button>
                         </div>
-                        <Editor
-                          height="70vh"
-                          language="mlir"
-                          value={irWin.output}
-                          onChange={() => {}}
-                          theme="mlirTheme"
-                          options={{ readOnly: true }}
-                        />
+                        <div
+                          style={{
+                            flex: 1,
+                            minHeight: 0,
+                            overflow: "auto",
+                          }}
+                        >
+                          <Editor
+                            height="100%"
+                            language="mlir"
+                            value={irWin.output}
+                            onChange={() => {}}
+                            theme="mlirTheme"
+                            options={{ readOnly: true }}
+                          />
+                        </div>
                       </>
                     )}
                   </div>
