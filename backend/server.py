@@ -338,7 +338,7 @@ def generate_llvm_mlir(
 # First generate LLVM MLIR and then translate it to LLVM IR.
 def generate_llvm_ir(
     model, example_input, pipeline: List[Tuple[str, str]], dump_each: bool
-):
+) -> str:
     try:
         lowered_mlir = lower_to_llvm_mlir(model, example_input)
 
@@ -360,6 +360,23 @@ def generate_llvm_ir(
 
         llvm_ir = result.stdout
         return apply_optional_passes(llvm_ir, pipeline, dump_each)
+    except Exception as e:
+        logger.exception("Error generating LLVM IR.")
+        raise IRGenerationError("Failed to generate LLVM IR.")
+
+
+# Generate NVPTX, AMDGPU or SPIR-V.
+def generate_target_gpu_ir(model, example_input, target: str) -> str:
+    try:
+        llvm_ir_module = generate_llvm_ir(model, example_input, [], False)
+        pipeline: list[tuple[str, str]] = [("opt", "-O2")]
+        if target == "nvptx":
+            pipeline.append(("llc", "-mtriple=nvptx64-nvidia-cuda"))
+        elif target == "amdgpu":
+            pipeline.append(("llc", "-mtriple amdgcn-amd-amdhsa"))
+        elif target == "spirv":
+            pipeline.append(("llc", "-mtriple=spirv64-unknown-unknown"))
+        return apply_optional_passes(llvm_ir_module, pipeline, False)
     except Exception as e:
         logger.exception("Error generating LLVM IR.")
         raise IRGenerationError("Failed to generate LLVM IR.")
@@ -546,6 +563,14 @@ def process_model(request: CodeRequest) -> str:
             elif request.ir_type == "llvm_ir":
                 combined_output += generate_llvm_ir(
                     model, example_input, pipeline, request.dump_after_each_opt
+                )
+            elif request.ir_type in ("nvptx", "amdgpu", "spirv"):
+                # FIXME?: it could really be just generate_llvm_ir with the pipeline.
+                # Yet I prefered a dedicated function in case of some smart things has
+                # to be done before lowering. For example for SPIR-V it's nice idea
+                # to create a kernel first aka write a pass and execute it here.
+                combined_output += generate_target_gpu_ir(
+                    model, example_input, request.ir_type
                 )
             else:
                 combined_output += "IR type not supported yet."
