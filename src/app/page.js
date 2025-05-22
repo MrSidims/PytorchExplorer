@@ -137,6 +137,10 @@ export default function PyTorchTritonExplorer() {
   const [editFlags, setEditFlags] = useState("");
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [layout, setLayout] = useState("vertical");
+  const [exploreStage, setExploreStage] = useState({
+    windowId: null,
+    stageIdx: null,
+  });
 
   const isTriton = selectedLanguage === "triton";
   const isPytorch = selectedLanguage === "pytorch";
@@ -346,7 +350,19 @@ export default function PyTorchTritonExplorer() {
     }));
   };
 
+  function filterToStage(fullDump, stageIdx) {
+    const slices = fullDump.split(/===== /).slice(1);
+    const block = slices[stageIdx + 1];
+    if (!block) {
+      // out-of-range - fallback to dump after each stage
+      return fullDump;
+    }
+    const lines = block.split("\n");
+    return lines.slice(1).join("\n").trim();
+  }
+
   const generateIR = async (id) => {
+    const exploring = exploreStage.windowId === id;
     updateActiveSource((s) => ({
       ...s,
       irWindows: s.irWindows.map((w) =>
@@ -386,7 +402,7 @@ export default function PyTorchTritonExplorer() {
         .filter((p) => p.tool === "user-tool")
         .map((p) => p.flags)
         .join(" && "),
-      dump_after_each_opt: irWin.dumpAfterEachOpt,
+      dump_after_each_opt: exploring ? true : irWin.dumpAfterEachOpt,
     };
 
     const response = await fetch(
@@ -1023,6 +1039,23 @@ export default function PyTorchTritonExplorer() {
                                         {preview}
                                       </span>
                                     </span>
+                                    {/*Explore‐at‐this‐stage*/}
+                                    <button
+                                      onClick={() => {
+                                        setExploreStage({
+                                          windowId: irWin.id,
+                                          stageIdx: i,
+                                        });
+                                        generateIR(irWin.id);
+                                      }}
+                                      style={{
+                                        marginLeft: 4,
+                                        padding: "2px 6px",
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      🔍
+                                    </button>
                                   </React.Fragment>
                                 );
                               })}
@@ -1081,6 +1114,28 @@ export default function PyTorchTritonExplorer() {
                               ? "✓ Print IR after opts"
                               : "Print IR after opts"}
                           </button>
+                          {/*Reset explore-mode*/}
+                          {exploreStage.windowId === irWin.id && (
+                            <button
+                              onClick={() =>
+                                setExploreStage({
+                                  windowId: null,
+                                  stageIdx: null,
+                                })
+                              }
+                              style={{
+                                flex: 1,
+                                padding: "4px",
+                                backgroundColor: "#ccc",
+                                border: "none",
+                                borderRadius: "5px",
+                                fontWeight: "bold",
+                                cursor: "pointer",
+                              }}
+                            >
+                              Reset Explore At Stage
+                            </button>
+                          )}
                         </div>
                         <div
                           style={{
@@ -1092,7 +1147,14 @@ export default function PyTorchTritonExplorer() {
                           <Editor
                             height="100%"
                             language="mlir"
-                            value={irWin.output}
+                            value={
+                              exploreStage.windowId === irWin.id
+                                ? filterToStage(
+                                    irWin.output,
+                                    exploreStage.stageIdx,
+                                  )
+                                : irWin.output
+                            }
                             onChange={() => {}}
                             theme="mlirTheme"
                             options={{ readOnly: true }}
