@@ -181,6 +181,30 @@ export default function PyTorchTritonExplorer() {
     });
   }, []);
 
+  const addSource = () => {
+    const newId = sources.length + 1;
+    const template = {
+      id: newId,
+      name: `Source ${newId}`,
+      selectedLanguage: "pytorch",
+      code: defaultPyTorchCode,
+      irWindows: [
+        {
+          id: 1,
+          selectedIR: "torch_script_graph_ir",
+          output: "Select IR and Generate",
+          collapsed: false,
+          loading: false,
+          pipeline: [],
+          dumpAfterEachOpt: false,
+        },
+      ],
+      customToolCmd: {},
+    };
+    setSources((prev) => [...prev, template]);
+    setActiveSourceId(newId);
+  };
+
   const handleAddPass = (id, tool) => {
     const flags = prompt(`Enter flags for ${tool}`);
     if (flags !== null) {
@@ -457,55 +481,56 @@ export default function PyTorchTritonExplorer() {
               }}
             >
               <h2 style={{ margin: 0 }}>Source code tabs</h2>
-              <button
-                onClick={() => {
-                  const newId = sources.length + 1;
-                  setSources([
-                    ...sources,
-                    {
-                      id: newId,
-                      name: `Source ${newId}`,
-                      selectedLanguage: "pytorch",
-                      code: defaultPyTorchCode,
-                      irWindows: [
-                        {
-                          id: 1,
-                          selectedIR: "torch_script_graph_ir",
-                          output: "Select IR and Generate",
-                          collapsed: false,
-                          loading: false,
-                          pipeline: [],
-                          dumpAfterEachOpt: false,
-                        },
-                      ],
-                      customToolCmd: {},
-                    },
-                  ]);
-                  setActiveSourceId(newId);
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                padding: "4px 10px",
+              }}
+            >
+              <Tabs
+                activeKey={String(activeSourceId)}
+                type="editable-card"
+                hideAdd
+                onChange={(key) => setActiveSourceId(Number(key))}
+                onEdit={(targetKey, action) => {
+                  if (action === "remove") {
+                    setSources((prev) => {
+                      const next = prev.filter(
+                        (src) => String(src.id) !== targetKey,
+                      );
+                      // if we just closed the active tab, switch to the first one
+                      if (String(activeSourceId) === targetKey) {
+                        setActiveSourceId(next[0]?.id ?? null);
+                      }
+                      return next;
+                    });
+                  }
                 }}
+                items={sources.map((src) => ({
+                  key: String(src.id),
+                  label: `${src.name} (${src.selectedLanguage})`,
+                  closable: sources.length > 1,
+                }))}
+              />
+              <button
+                onClick={addSource}
                 style={{
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "2px",
-                  fontSize: "0.7rem",
-                  height: "30px",
+                  marginLeft: "auto",
                   backgroundColor: "#5fa",
+                  fontSize: "0.8rem",
+                  color: "black",
                   border: "none",
-                  borderRadius: "5px",
-                  fontWeight: "bold",
+                  borderRadius: "4px",
+                  padding: "4px 8px",
                   cursor: "pointer",
                 }}
               >
                 Add Source
               </button>
             </div>
-            <Tabs
-              activeKey={`${activeSourceId}`}
-              onChange={(key) => setActiveSourceId(Number(key))}
-              items={sourceTabs}
-              style={{ marginLeft: 16 }}
-            />
 
             <select
               value={selectedLanguage}
