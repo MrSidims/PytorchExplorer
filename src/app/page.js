@@ -79,6 +79,9 @@ const pytorchIROptions = [
   { value: "stablehlo_mlir", label: "StableHLO MLIR" },
   { value: "llvm_mlir", label: "LLVM MLIR" },
   { value: "llvm_ir", label: "LLVM IR" },
+  { value: "nvptx", label: "NVPTX" },
+  { value: "amdgpu", label: "AMDGPU" },
+  { value: "spirv", label: "SPIR-V" },
   { value: "raw_ir", label: "Raw IR Output" },
 ];
 
@@ -756,8 +759,12 @@ export default function PyTorchTritonExplorer() {
                             "triton_gpu_ir",
                             "triton_llvm_ir",
                           ].includes(irWin.selectedIR);
-                          const allowLlvmOpt =
-                            irWin.selectedIR !== "triton_nvptx";
+                          const allowLlvmOpt = ![
+                            "triton_nvptx",
+                            "nvptx",
+                            "amdgpu",
+                            "spirv",
+                          ].includes(irWin.selectedIR);
                           const allowLLC = allowLlvmOpt;
                           const allowUserTool = true;
 
