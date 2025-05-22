@@ -355,7 +355,9 @@ export default function PyTorchTritonExplorer() {
     const block = slices[stageIdx + 1];
     if (!block) {
       // out-of-range - fallback to dump after each stage
-      return fullDump;
+      return fullDump
+        .replace(/^===== .* =====\n/gm, "")
+        .trim();
     }
     const lines = block.split("\n");
     return lines.slice(1).join("\n").trim();
