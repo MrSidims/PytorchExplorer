@@ -13,7 +13,8 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: "PyTorch IR Explorer",
-  description: "An interactive web-based tool for exploring intermediate representations of PyTorch and Triton models",
+  description:
+    "An interactive web-based tool for exploring intermediate representations of PyTorch and Triton models",
 };
 
 export default function RootLayout({ children }) {
