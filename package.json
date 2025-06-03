@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev:ui":  "next dev",
+    "dev:api": "./mlir_venv/bin/python -m uvicorn backend.server:app --host 0.0.0.0 --port 8000 --reload",
+    "start:all": "concurrently \"npm run dev:ui\" \"npm run dev:api\"",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "start:all": "concurrently \"npm run dev\" \"./mlir_venv/bin/python -m uvicorn backend.server:app --host 0.0.0.0 --port 8000 --reload\""
+    "lint": "next lint"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
