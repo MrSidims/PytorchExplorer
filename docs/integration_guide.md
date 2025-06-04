@@ -41,7 +41,7 @@ If unset, the backend assumes the tools are discoverable on `$PATH`.
 
 ### 2.1.  `POST /generate_ir`
 
-```jsonc
+````ts
 // request
 {
   "code": "string",                // required – user code OR raw IR
@@ -74,7 +74,7 @@ If unset, the backend assumes the tools are discoverable on `$PATH`.
 
 Success 200 OK
 
-```json
+```ts
 {
   "status": "ok",
   "output": "<textual IR dump>"
@@ -83,7 +83,7 @@ Success 200 OK
 
 Failure 200 OK
 
-```json
+```ts
 {
   "status": "error",
   "message": "human-readable summary",
@@ -93,7 +93,7 @@ Failure 200 OK
 
 ### 2.2. POST /free_ir_cache
 
-```json
+```ts
 // request
 { "code": "<same code string sent earlier>" }
 
@@ -129,10 +129,10 @@ Calling this is optional but keeps /tmp tidy on long-running servers.
 graph TD
     A[Incoming /generate_ir] --> B{ir_type group}
     B -- Triton --> C[compile_triton_ir]
-    B -- Raw --> D[apply_optional_passes directly]
+    B -- Raw --> D["apply_optional_passes 'opt'"]
     B -- PyTorch --> E[extract_model_input_pairs]
     E --> F[generate_*_mlir / IR]
-    C & D & F --> G[apply_optional_passes (custom pipeline)]
+    C & D & F --> G["apply_optional_passes 'str'"]
     G --> H[(final output)]
 ```
 
@@ -210,7 +210,7 @@ Emit the exact marker strings so frontends can split IR dumps.
 **Graceful unsupported dialects**
 If you omit a value from §3, return:
 
-```json
+```ts
 { "status": "error",
   "message": "IR type not supported",
   "detail": "" }
