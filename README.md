@@ -123,5 +123,11 @@ mlir-opt --one-shot-bufferize="bufferize-function-boundaries"
          -reconcile-unrealized-casts
          str(module) -o output.mlir
 mlir-translate --mlir-to-llvmir output.mlir
+```
 
+For more details about IR lowering, please see [PyTorch Lowerings](docs/pytorch_lowering.md).
+
+## Integration with your frontend or backend
+
+Refer to the [Integration Guide](docs/integration_guide.md) for details on the API contracts and communication between the frontend and backend used in this project.
 
