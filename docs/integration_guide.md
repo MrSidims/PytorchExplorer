@@ -41,7 +41,7 @@ If unset, the backend assumes the tools are discoverable on `$PATH`.
 
 ### 2.1.  `POST /generate_ir`
 
-````ts
+```ts
 // request
 {
   "code": "string",                // required – user code OR raw IR
