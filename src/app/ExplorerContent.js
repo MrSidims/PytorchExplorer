@@ -226,9 +226,17 @@ export default function ExplorerContent() {
   const handleUpdatePass = () => {
     updateActiveSource((s) => ({
       ...s,
-      irWindows: s.irWindows.map((p, i) =>
-        i === editPassIndex ? { tool: editTool, flags: editFlags } : p,
-      ),
+      irWindows: s.irWindows.map((w) => {
+        if (w.id !== editPassWindowId) return w;
+
+        // replace only the single pass in w.pipeline
+        return {
+          ...w,
+          pipeline: w.pipeline.map((pass, idx) =>
+            idx === editPassIndex ? { tool: editTool, flags: editFlags } : pass,
+          ),
+        };
+      }),
     }));
     setEditModalVisible(false);
   };
@@ -236,7 +244,15 @@ export default function ExplorerContent() {
   const handleRemovePass = () => {
     updateActiveSource((s) => ({
       ...s,
-      irWindows: s.irWindows.filter((_, i) => i !== editPassIndex),
+      irWindows: s.irWindows.map((w) => {
+        if (w.id !== editPassWindowId) return w;
+
+        // drop just that one pass in w.pipeline
+        return {
+          ...w,
+          pipeline: w.pipeline.filter((_, idx) => idx !== editPassIndex),
+        };
+      }),
     }));
     setEditModalVisible(false);
   };
