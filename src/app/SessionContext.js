@@ -29,7 +29,7 @@ class MyModel(nn.Module):
 model = MyModel()
 example_input = torch.randn(4, 4)
 # If you have multiple models, wrap each model and input tensor pair using:
-# __explore__(model, input_tensor)
+# __explore__(model, example_input)
 `,
       irWindows: [
         {

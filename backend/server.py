@@ -8,6 +8,7 @@ import shutil
 import atexit
 import logging
 import traceback
+import pickle
 from typing import List, Optional, Tuple
 import re
 
@@ -71,40 +72,110 @@ class FreeIRCacheRequest(BaseModel):
 
 
 # Get model-tensor pairs to process.
-def extract_model_input_pairs(code: str):
-    explore_pairs = []
+def extract_model_input_pairs(code: str) -> List[Tuple[nn.Module, torch.Tensor]]:
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w+", suffix=".py", delete=False
+        ) as tmp_code_file:
+            tmp_code_file.write(code)
+            tmp_code_file.flush()
+            code_path = tmp_code_file.name
 
-    def __explore__(model, input_tensor):
-        explore_pairs.append((model, input_tensor))
+        with tempfile.NamedTemporaryFile(
+            mode="wb", suffix=".pkl", delete=False
+        ) as tmp_pickle_file:
+            pickle_path = tmp_pickle_file.name
 
-    exec_globals = {"__explore__": __explore__}
+        runner_code = """
+import sys
+import torch
+import torch.nn as nn
 
-    # Suppress stdout and stderr.
-    with open(os.devnull, "w") as devnull:
+code_path, pickle_path = sys.argv[1], sys.argv[2]
+explore_pairs = []
+
+def __explore__(model, input_tensor):
+    explore_pairs.append((model, input_tensor))
+
+exec_globals = {'__explore__': __explore__}
+with open(code_path) as f:
+    exec(f.read(), exec_globals)
+
+if not explore_pairs:
+    models = [v for v in exec_globals.values() if isinstance(v, nn.Module)]
+    tensors = [v for v in exec_globals.values() if isinstance(v, torch.Tensor)]
+    for model in models:
+        for tensor in tensors:
+            try:
+                model.eval()
+                with torch.no_grad():
+                    model(tensor)
+                explore_pairs.append((model, tensor))
+                break
+            except Exception:
+                continue
+
+with open(pickle_path, 'wb') as f:
+    pickle.dump(explore_pairs, f)
+"""
+
+        with tempfile.NamedTemporaryFile(
+            mode="w+", suffix=".py", delete=False
+        ) as runner_file:
+            runner_file.write(runner_code)
+            runner_file.flush()
+            runner_path = runner_file.name
+
+        result = subprocess.run(
+            ["python3", runner_path, code_path, pickle_path],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr)
+
+        with open(pickle_path, "rb") as f:
+            return pickle.load(f)
+
+    except Exception:
+        logger.exception(
+            "Subprocess execution failed. Falling back to in-process exec."
+        )
+
+        # Fallback mode: try matching models and tensors in-process
+        explore_pairs = []
+
+        def __explore__(model, input_tensor):
+            explore_pairs.append((model, input_tensor))
+
+        exec_globals = {"__explore__": __explore__}
+
         try:
-            with redirect_stdout(devnull), redirect_stderr(devnull):
+            with open(os.devnull, "w") as devnull, redirect_stdout(
+                devnull
+            ), redirect_stderr(devnull):
                 exec(code, exec_globals)
-        except Exception as e:
-            logger.exception("User code execution failed in extract_model_input_pairs")
-            raise PytorchExecutionError("Code raised an exception during exploration.")
+        except Exception:
+            logger.exception("User code execution failed in fallback path.")
+            raise PytorchExecutionError("User code raised an exception.")
 
-    # If no __explore__ calls found, try matching models and tensors heuristically.
-    if not explore_pairs:
-        models = [v for v in exec_globals.values() if isinstance(v, nn.Module)]
-        tensors = [v for v in exec_globals.values() if isinstance(v, torch.Tensor)]
+        if not explore_pairs:
+            models = [v for v in exec_globals.values() if isinstance(v, nn.Module)]
+            tensors = [v for v in exec_globals.values() if isinstance(v, torch.Tensor)]
+            for model in models:
+                for tensor in tensors:
+                    try:
+                        model.eval()
+                        with torch.no_grad():
+                            model(tensor)
+                        explore_pairs.append((model, tensor))
+                        break
+                    except Exception:
+                        continue
 
-        for model in models:
-            for tensor in tensors:
-                try:
-                    model.eval()
-                    with torch.no_grad():
-                        model(tensor)
-                    explore_pairs.append((model, tensor))
-                    break
-                except Exception:
-                    continue  # Bad model, tensor combos can happen, continue silently
-
-    return explore_pairs
+        return explore_pairs
 
 
 # TODO: reuse it for pytorch?
@@ -121,7 +192,7 @@ def fix_input(input_obj):
 
 def split_cmd_arguments(cmd: str) -> List[str]:
     # Split the command string into arguments, handling quoted strings.
-    cmd_split = re.split(r''' (?=(?:[^'"]|'[^']*'|"[^"]*")*$)''', cmd.strip())
+    cmd_split = re.split(r""" (?=(?:[^'"]|'[^']*'|"[^"]*")*$)""", cmd.strip())
     # Remove quotes from each argument.
     cmd_split = [arg.replace('"', "").replace("'", "") for arg in cmd_split]
     return cmd_split
@@ -131,13 +202,21 @@ def split_cmd_arguments(cmd: str) -> List[str]:
 def run_external_opt_tool_file(
     input_path: str, cmd: str, tool: str, output_path: str
 ) -> Tuple[bool, str]:
+    args = [tool] + split_cmd_arguments(cmd) + [input_path, "-o", output_path]
     try:
-        args = [tool] + split_cmd_arguments(cmd) + [input_path, "-o", output_path]
-        result = subprocess.run(args, capture_output=True, text=True)
-        return (result.returncode == 0, result.stderr if result.stderr else "")
+        result = subprocess.run(args, capture_output=True, text=True, check=True)
+        return (True, result.stderr or "")
+    except subprocess.CalledProcessError as e:
+        logger.error(
+            f"Tool '{tool}' failed with return code {e.returncode}:\n{e.stderr}"
+        )
+        return (False, e.stderr or f"{tool} failed unexpectedly.")
+    except FileNotFoundError as e:
+        logger.error(f"Tool not found: {tool}", exc_info=True)
+        raise CompilerPipelineError(f"Compiler tool '{tool}' not found.")
     except Exception as e:
-        logger.error(f"Failed to run tool '{tool}': {e}", exc_info=True)
-        raise CompilerPipelineError(f"Failed to run compiler tool '{tool}' : {e}")
+        logger.error(f"Unexpected error running tool '{tool}': {e}", exc_info=True)
+        raise CompilerPipelineError(f"Unexpected error while running '{tool}': {e}")
 
 
 # Utility for custom pipeline.
@@ -296,31 +375,36 @@ def lower_to_llvm_mlir(model, example_input) -> str:
         f.flush()
         input_path = f.name
 
-    result = subprocess.run(
-        [
-            LLVM_BIN_PATH + "mlir-opt",
-            '--one-shot-bufferize="bufferize-function-boundaries"',
-            "-convert-linalg-to-loops",
-            "-convert-scf-to-cf",
-            "-convert-cf-to-llvm",
-            "-lower-affine",
-            "-finalize-memref-to-llvm",
-            "-convert-math-to-llvm",
-            "-convert-arith-to-llvm",
-            "-convert-func-to-llvm",
-            "-reconcile-unrealized-casts",
-            input_path,
-        ],
-        capture_output=True,
-        text=True,
-    )
+    cmd = [
+        LLVM_BIN_PATH + "mlir-opt",
+        '--one-shot-bufferize="bufferize-function-boundaries"',
+        "-convert-linalg-to-loops",
+        "-convert-scf-to-cf",
+        "-convert-cf-to-llvm",
+        "-lower-affine",
+        "-finalize-memref-to-llvm",
+        "-convert-math-to-llvm",
+        "-convert-arith-to-llvm",
+        "-convert-func-to-llvm",
+        "-reconcile-unrealized-casts",
+        input_path,
+    ]
 
-    os.remove(input_path)
-
-    if result.returncode != 0:
-        raise CompilerPipelineError(f"mlir-opt failed: {result.stderr}")
-
-    return result.stdout
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        raise CompilerPipelineError(
+            f"mlir-opt failed with code {e.returncode}: {e.stderr}"
+        )
+    except FileNotFoundError:
+        raise CompilerPipelineError(f"'mlir-opt' not found at path: {cmd[0]}")
+    finally:
+        # Prevent tmp leaks
+        try:
+            os.remove(input_path)
+        except Exception:
+            pass
 
 
 # Generate LLVM MLIR.
@@ -351,18 +435,26 @@ def generate_llvm_ir(
             [LLVM_BIN_PATH + "mlir-translate", "--mlir-to-llvmir", input_path],
             capture_output=True,
             text=True,
+            check=True,
         )
-
-        os.remove(input_path)
-
-        if result.returncode != 0:
-            raise CompilerPipelineError(f"mlir-translate failed: {result.stderr}")
 
         llvm_ir = result.stdout
         return apply_optional_passes(llvm_ir, pipeline, dump_each)
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"mlir-translate failed: {e.stderr}", exc_info=True)
+        raise CompilerPipelineError(f"mlir-translate failed: {e.stderr}")
+
     except Exception as e:
         logger.exception("Error generating LLVM IR.")
         raise IRGenerationError("Failed to generate LLVM IR.")
+
+    finally:
+        # Prevent tmp leaks
+        try:
+            os.remove(input_path)
+        except Exception:
+            pass
 
 
 # Generate NVPTX, AMDGPU or SPIR-V.
@@ -408,20 +500,27 @@ def compile_triton_ir(
                 tmp_file.flush()
                 tmp_path = tmp_file.name
 
-            result = subprocess.run(
-                ["python3", tmp_path],
-                capture_output=True,
-                text=True,
-                env=env,
-                timeout=20,
-            )
-
-            os.remove(tmp_path)
-
-            if result.returncode != 0:
+            try:
+                result = subprocess.run(
+                    ["python3", tmp_path],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    timeout=60,
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e:
                 shutil.rmtree(cache_dir, ignore_errors=True)
-                logger.exception("User code execution failed.")
+                logger.error(
+                    f"Triton code execution failed:\n{e.stderr}", exc_info=True
+                )
                 raise TritonExecutionError("Triton code execution raised an exception.")
+            finally:
+                # Prevent tmp leaks
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
 
             cached_triton_runs[code_hash] = {"cache_dir": cache_dir, "active_users": 0}
 
@@ -496,22 +595,67 @@ def process_model(request: CodeRequest) -> str:
             )
 
         if request.ir_type == "raw_ir" and request.selected_language == "pytorch":
-            # Execute user Python, capture stdout.
+            # Execute user Python, capture stdout via subprocess to avoid unsafe exec.
             try:
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    stdout_path = os.path.join(tmpdir, "captured_output.txt")
-                    with open(stdout_path, "w") as f, redirect_stdout(
-                        f
-                    ), redirect_stderr(f):
-                        exec_globals = {}
-                        exec(request.code, exec_globals)
+                with tempfile.NamedTemporaryFile(
+                    mode="w+", suffix=".py", delete=False
+                ) as tmp_code_file:
+                    tmp_code_file.write(request.code)
+                    tmp_code_file.flush()
+                    code_path = tmp_code_file.name
 
-                    with open(stdout_path, "r") as f:
-                        captured = f.read()
+                with tempfile.NamedTemporaryFile(
+                    mode="r+", suffix=".txt", delete=False
+                ) as tmp_output_file:
+                    output_path = tmp_output_file.name
+
+                runner_code = """
+import sys
+import traceback
+
+code_path, output_path = sys.argv[1], sys.argv[2]
+exec_globals = {}
+
+try:
+    with open(code_path) as f:
+        code = f.read()
+    with open(output_path, "w") as out_file:
+        with open("/dev/null", "r") as devnull:
+            import contextlib, io
+            with contextlib.redirect_stdout(out_file), contextlib.redirect_stderr(out_file):
+                exec(code, exec_globals)
+except Exception:
+    with open(output_path, "a") as out_file:
+        traceback.print_exc(file=out_file)
+    sys.exit(2)
+"""
+
+                with tempfile.NamedTemporaryFile(
+                    mode="w+", suffix=".py", delete=False
+                ) as runner_file:
+                    runner_file.write(runner_code)
+                    runner_file.flush()
+                    runner_path = runner_file.name
+
+                result = subprocess.run(
+                    ["python3", runner_path, code_path, output_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+
+                with open(output_path, "r") as f:
+                    captured = f.read()
+
+                if result.returncode != 0:
+                    raise PytorchExecutionError(
+                        "Code raised an exception:\n" + captured.strip()
+                    )
 
                 return apply_optional_passes(
                     captured, build_pipeline(request), request.dump_after_each_opt
                 )
+
             except Exception as e:
                 logger.exception("User code with manual IR print execution failed.")
                 raise PytorchExecutionError(

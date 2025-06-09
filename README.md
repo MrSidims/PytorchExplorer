@@ -47,48 +47,88 @@ Current version of the application is tested on Ubuntu 22.04 windows subsystem u
 
 ### Install dependencies
 
-In case of missing prerequisites here are some scripts to help set them up (runs on Debian and its derivatives).
-
+Clone the repository:
 ```bash
 git clone https://github.com/MrSidims/PytorchExplorer.git
 cd PytorchExplorer
+```
+
+Install frontend dependencies:
+```bash
 source setup_frontend.sh
 ```
 
-When you have venv suitable for `torch-mlir` work, install `fastapi`, `uvicorn` etc in venv like this:
-
-```bash
-pip install fastapi uvicorn pytest httpx
-```
-
-Otherwise here is the script to setup `torch`, `llvm` etc:
-
-
+Set up backend (Torch, MLIR, etc.):
 ```bash
 source setup_backend.sh
 ```
 
-If you want to use your builds of the tools like `torch-mlir-opt`, `mlir-opt` etc without placing them in `PATH` please setup `TORCH_MLIR_OPT_PATH` and `LLVM_BIN_PATH` environment variables.
+If you already have a working venv for Torch-MLIR, you can just install FastAPI and testing dependencies:
+```bash
+pip install fastapi uvicorn pytest httpx
+```
+
+To use custom builds of `torch-mlir-opt`, `mlir-opt`, etc. without placing them in your `$PATH`, configure the following environment variables:
+- `TORCH_MLIR_OPT_PATH`
+- `LLVM_BIN_PATH`
+- `TRITON_OPT_PATH`
 
 ### Run the application
 
+#### Development mode (local)
 ```bash
+npm run dev:all
+```
+Then open http://localhost:3000/
+
+#### Production mode (local)
+```bash
+npm run build
 npm run start:all
 ```
 
 Then open http://localhost:3000/ in your browser and enjoy!
 
-### Run in a docker
+#### Run in a container (Docker or Podman)
 
-Build image with:
-
+Build the image (change APP_ENV between development/production, default is production):
 ```bash
-docker build -t pytorch_explorer .
+docker build -t pytorch_explorer --build-arg APP_ENV=development .
 ```
 
-Run it:
+Run the container in **production mode**:
 ```bash
 docker run -p 3000:3000 -p 8000:8000 pytorch_explorer
+```
+Then inside the container:
+```bash
+npm run build
+npm run start:all
+```
+
+To run in **development mode**:
+```bash
+docker run -it --rm \
+  -e NODE_ENV=development \
+  -p 3000:3000 -p 8000:8000 \
+  pytorch_explorer
+```
+Then inside the container:
+```bash
+npm run dev:all
+```
+
+Secure run (in cases, when you don't trust tested samples):
+```bash
+podman run --rm -it \
+  --read-only \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges \
+  --tmpfs /app/.next:rw,size=256m \
+  -v stored_sessions:/app/StoredSessions:rw \
+  -p8000:8000 -p3000:3000 \
+  -e NODE_ENV=production \
+  pytorch_explorer
 ```
 
 ### Run the tests
