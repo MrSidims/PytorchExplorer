@@ -8,7 +8,6 @@ import shutil
 import atexit
 import logging
 import traceback
-import pickle
 from typing import List, Optional, Tuple
 import re
 
@@ -72,110 +71,40 @@ class FreeIRCacheRequest(BaseModel):
 
 
 # Get model-tensor pairs to process.
-def extract_model_input_pairs(code: str) -> List[Tuple[nn.Module, torch.Tensor]]:
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w+", suffix=".py", delete=False
-        ) as tmp_code_file:
-            tmp_code_file.write(code)
-            tmp_code_file.flush()
-            code_path = tmp_code_file.name
+def extract_model_input_pairs(code: str):
+    explore_pairs = []
 
-        with tempfile.NamedTemporaryFile(
-            mode="wb", suffix=".pkl", delete=False
-        ) as tmp_pickle_file:
-            pickle_path = tmp_pickle_file.name
+    def __explore__(model, input_tensor):
+        explore_pairs.append((model, input_tensor))
 
-        runner_code = """
-import sys
-import torch
-import torch.nn as nn
+    exec_globals = {"__explore__": __explore__}
 
-code_path, pickle_path = sys.argv[1], sys.argv[2]
-explore_pairs = []
-
-def __explore__(model, input_tensor):
-    explore_pairs.append((model, input_tensor))
-
-exec_globals = {'__explore__': __explore__}
-with open(code_path) as f:
-    exec(f.read(), exec_globals)
-
-if not explore_pairs:
-    models = [v for v in exec_globals.values() if isinstance(v, nn.Module)]
-    tensors = [v for v in exec_globals.values() if isinstance(v, torch.Tensor)]
-    for model in models:
-        for tensor in tensors:
-            try:
-                model.eval()
-                with torch.no_grad():
-                    model(tensor)
-                explore_pairs.append((model, tensor))
-                break
-            except Exception:
-                continue
-
-with open(pickle_path, 'wb') as f:
-    pickle.dump(explore_pairs, f)
-"""
-
-        with tempfile.NamedTemporaryFile(
-            mode="w+", suffix=".py", delete=False
-        ) as runner_file:
-            runner_file.write(runner_code)
-            runner_file.flush()
-            runner_path = runner_file.name
-
-        result = subprocess.run(
-            ["python3", runner_path, code_path, pickle_path],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr)
-
-        with open(pickle_path, "rb") as f:
-            return pickle.load(f)
-
-    except Exception:
-        logger.exception(
-            "Subprocess execution failed. Falling back to in-process exec."
-        )
-
-        # Fallback mode: try matching models and tensors in-process
-        explore_pairs = []
-
-        def __explore__(model, input_tensor):
-            explore_pairs.append((model, input_tensor))
-
-        exec_globals = {"__explore__": __explore__}
-
+    # Suppress stdout and stderr.
+    with open(os.devnull, "w") as devnull:
         try:
-            with open(os.devnull, "w") as devnull, redirect_stdout(
-                devnull
-            ), redirect_stderr(devnull):
+            with redirect_stdout(devnull), redirect_stderr(devnull):
                 exec(code, exec_globals)
-        except Exception:
-            logger.exception("User code execution failed in fallback path.")
-            raise PytorchExecutionError("User code raised an exception.")
+        except Exception as e:
+            logger.exception("User code execution failed in extract_model_input_pairs")
+            raise PytorchExecutionError("Code raised an exception during exploration.")
 
-        if not explore_pairs:
-            models = [v for v in exec_globals.values() if isinstance(v, nn.Module)]
-            tensors = [v for v in exec_globals.values() if isinstance(v, torch.Tensor)]
-            for model in models:
-                for tensor in tensors:
-                    try:
-                        model.eval()
-                        with torch.no_grad():
-                            model(tensor)
-                        explore_pairs.append((model, tensor))
-                        break
-                    except Exception:
-                        continue
+    # If no __explore__ calls found, try matching models and tensors heuristically.
+    if not explore_pairs:
+        models = [v for v in exec_globals.values() if isinstance(v, nn.Module)]
+        tensors = [v for v in exec_globals.values() if isinstance(v, torch.Tensor)]
 
-        return explore_pairs
+        for model in models:
+            for tensor in tensors:
+                try:
+                    model.eval()
+                    with torch.no_grad():
+                        model(tensor)
+                    explore_pairs.append((model, tensor))
+                    break
+                except Exception:
+                    continue  # Bad model, tensor combos can happen, continue silently
+
+    return explore_pairs
 
 
 # TODO: reuse it for pytorch?
@@ -595,67 +524,22 @@ def process_model(request: CodeRequest) -> str:
             )
 
         if request.ir_type == "raw_ir" and request.selected_language == "pytorch":
-            # Execute user Python, capture stdout via subprocess to avoid unsafe exec.
+            # Execute user Python, capture stdout.
             try:
-                with tempfile.NamedTemporaryFile(
-                    mode="w+", suffix=".py", delete=False
-                ) as tmp_code_file:
-                    tmp_code_file.write(request.code)
-                    tmp_code_file.flush()
-                    code_path = tmp_code_file.name
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    stdout_path = os.path.join(tmpdir, "captured_output.txt")
+                    with open(stdout_path, "w") as f, redirect_stdout(
+                        f
+                    ), redirect_stderr(f):
+                        exec_globals = {}
+                        exec(request.code, exec_globals)
 
-                with tempfile.NamedTemporaryFile(
-                    mode="r+", suffix=".txt", delete=False
-                ) as tmp_output_file:
-                    output_path = tmp_output_file.name
-
-                runner_code = """
-import sys
-import traceback
-
-code_path, output_path = sys.argv[1], sys.argv[2]
-exec_globals = {}
-
-try:
-    with open(code_path) as f:
-        code = f.read()
-    with open(output_path, "w") as out_file:
-        with open("/dev/null", "r") as devnull:
-            import contextlib, io
-            with contextlib.redirect_stdout(out_file), contextlib.redirect_stderr(out_file):
-                exec(code, exec_globals)
-except Exception:
-    with open(output_path, "a") as out_file:
-        traceback.print_exc(file=out_file)
-    sys.exit(2)
-"""
-
-                with tempfile.NamedTemporaryFile(
-                    mode="w+", suffix=".py", delete=False
-                ) as runner_file:
-                    runner_file.write(runner_code)
-                    runner_file.flush()
-                    runner_path = runner_file.name
-
-                result = subprocess.run(
-                    ["python3", runner_path, code_path, output_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
-
-                with open(output_path, "r") as f:
-                    captured = f.read()
-
-                if result.returncode != 0:
-                    raise PytorchExecutionError(
-                        "Code raised an exception:\n" + captured.strip()
-                    )
+                    with open(stdout_path, "r") as f:
+                        captured = f.read()
 
                 return apply_optional_passes(
                     captured, build_pipeline(request), request.dump_after_each_opt
                 )
-
             except Exception as e:
                 logger.exception("User code with manual IR print execution failed.")
                 raise PytorchExecutionError(
