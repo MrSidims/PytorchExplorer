@@ -1,28 +1,62 @@
-FROM ubuntu:latest
+# Single-stage Dockerfile using slim Python base
+FROM python:3.11-slim
 
-COPY . ./app
+# Environment variables
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DEFAULT_TIMEOUT=100 \
+    NEXT_TELEMETRY_DISABLED=1
+
+ARG APP_ENV=production
+ENV NODE_ENV=$APP_ENV
+
 WORKDIR /app
 
-RUN apt update; apt install -y wget lsb-release software-properties-common gnupg curl ca-certificates
+# Install minimal tooling
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      ca-certificates wget curl gnupg lsb-release software-properties-common && \
+    rm -rf /var/lib/apt/lists/*
 
+# Add LLVM 21 repository
 RUN wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 21
-RUN apt install -y libmlir-21-dev mlir-21-tools 
 
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-RUN apt install -y nodejs
-RUN npm install
+# Add Node.js 20 repository and install runtime deps
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+      libmlir-21-dev mlir-21-tools nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN add-apt-repository -y ppa:deadsnakes/ppa; apt install -y python3-pip python3.11-venv
+# Copy application code
+COPY --chown=10001:10001 . /app
 
-RUN python3.11 -m venv mlir_venv
+# Install JS dependencies, then install 'concurrently' globally
+RUN npm install && \
+    npm install -g concurrently
 
-RUN mlir_venv/bin/pip install --upgrade pip
-RUN mlir_venv/bin/pip install --pre torch-mlir torchvision \
-      --extra-index-url https://download.pytorch.org/whl/nightly/cpu \
-        -f https://github.com/llvm/torch-mlir-release/releases/expanded_assets/dev-wheels
+# Create Python venv and install Python packages
+RUN python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
+    /opt/venv/bin/pip install --pre torch-mlir torchvision \
+      --extra-index-url=https://download.pytorch.org/whl/nightly/cpu \
+      -f https://github.com/llvm/torch-mlir-release/releases/expanded_assets/dev-wheels && \
+    /opt/venv/bin/pip install fastapi uvicorn pytest httpx
 
-RUN mlir_venv/bin/pip install fastapi uvicorn pytest httpx
+# Create non-root user and fix permissions
+RUN useradd -u 10001 -m --shell /usr/sbin/nologin appuser && \
+    mkdir -p /home/appuser/.cache && \
+    chown -R appuser:appuser /home/appuser/.cache /app
+USER appuser
 
+# Update PATH for venv and LLVM
+ENV PATH="/opt/venv/bin:/usr/lib/llvm-21/bin:$PATH"
+
+# Expose ports and add healthcheck
 EXPOSE 3000 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s \
+  CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["npm", "run", "start:all"]
+# Default to interactive shell
+CMD ["/bin/sh"]

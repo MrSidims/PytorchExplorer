@@ -121,7 +121,7 @@ def fix_input(input_obj):
 
 def split_cmd_arguments(cmd: str) -> List[str]:
     # Split the command string into arguments, handling quoted strings.
-    cmd_split = re.split(r''' (?=(?:[^'"]|'[^']*'|"[^"]*")*$)''', cmd.strip())
+    cmd_split = re.split(r""" (?=(?:[^'"]|'[^']*'|"[^"]*")*$)""", cmd.strip())
     # Remove quotes from each argument.
     cmd_split = [arg.replace('"', "").replace("'", "") for arg in cmd_split]
     return cmd_split
@@ -131,13 +131,21 @@ def split_cmd_arguments(cmd: str) -> List[str]:
 def run_external_opt_tool_file(
     input_path: str, cmd: str, tool: str, output_path: str
 ) -> Tuple[bool, str]:
+    args = [tool] + split_cmd_arguments(cmd) + [input_path, "-o", output_path]
     try:
-        args = [tool] + split_cmd_arguments(cmd) + [input_path, "-o", output_path]
-        result = subprocess.run(args, capture_output=True, text=True)
-        return (result.returncode == 0, result.stderr if result.stderr else "")
+        result = subprocess.run(args, capture_output=True, text=True, check=True)
+        return (True, result.stderr or "")
+    except subprocess.CalledProcessError as e:
+        logger.error(
+            f"Tool '{tool}' failed with return code {e.returncode}:\n{e.stderr}"
+        )
+        return (False, e.stderr or f"{tool} failed unexpectedly.")
+    except FileNotFoundError as e:
+        logger.error(f"Tool not found: {tool}", exc_info=True)
+        raise CompilerPipelineError(f"Compiler tool '{tool}' not found.")
     except Exception as e:
-        logger.error(f"Failed to run tool '{tool}': {e}", exc_info=True)
-        raise CompilerPipelineError(f"Failed to run compiler tool '{tool}' : {e}")
+        logger.error(f"Unexpected error running tool '{tool}': {e}", exc_info=True)
+        raise CompilerPipelineError(f"Unexpected error while running '{tool}': {e}")
 
 
 # Utility for custom pipeline.
@@ -296,31 +304,36 @@ def lower_to_llvm_mlir(model, example_input) -> str:
         f.flush()
         input_path = f.name
 
-    result = subprocess.run(
-        [
-            LLVM_BIN_PATH + "mlir-opt",
-            '--one-shot-bufferize="bufferize-function-boundaries"',
-            "-convert-linalg-to-loops",
-            "-convert-scf-to-cf",
-            "-convert-cf-to-llvm",
-            "-lower-affine",
-            "-finalize-memref-to-llvm",
-            "-convert-math-to-llvm",
-            "-convert-arith-to-llvm",
-            "-convert-func-to-llvm",
-            "-reconcile-unrealized-casts",
-            input_path,
-        ],
-        capture_output=True,
-        text=True,
-    )
+    cmd = [
+        LLVM_BIN_PATH + "mlir-opt",
+        '--one-shot-bufferize="bufferize-function-boundaries"',
+        "-convert-linalg-to-loops",
+        "-convert-scf-to-cf",
+        "-convert-cf-to-llvm",
+        "-lower-affine",
+        "-finalize-memref-to-llvm",
+        "-convert-math-to-llvm",
+        "-convert-arith-to-llvm",
+        "-convert-func-to-llvm",
+        "-reconcile-unrealized-casts",
+        input_path,
+    ]
 
-    os.remove(input_path)
-
-    if result.returncode != 0:
-        raise CompilerPipelineError(f"mlir-opt failed: {result.stderr}")
-
-    return result.stdout
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        raise CompilerPipelineError(
+            f"mlir-opt failed with code {e.returncode}: {e.stderr}"
+        )
+    except FileNotFoundError:
+        raise CompilerPipelineError(f"'mlir-opt' not found at path: {cmd[0]}")
+    finally:
+        # Prevent tmp leaks
+        try:
+            os.remove(input_path)
+        except Exception:
+            pass
 
 
 # Generate LLVM MLIR.
@@ -351,18 +364,26 @@ def generate_llvm_ir(
             [LLVM_BIN_PATH + "mlir-translate", "--mlir-to-llvmir", input_path],
             capture_output=True,
             text=True,
+            check=True,
         )
-
-        os.remove(input_path)
-
-        if result.returncode != 0:
-            raise CompilerPipelineError(f"mlir-translate failed: {result.stderr}")
 
         llvm_ir = result.stdout
         return apply_optional_passes(llvm_ir, pipeline, dump_each)
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"mlir-translate failed: {e.stderr}", exc_info=True)
+        raise CompilerPipelineError(f"mlir-translate failed: {e.stderr}")
+
     except Exception as e:
         logger.exception("Error generating LLVM IR.")
         raise IRGenerationError("Failed to generate LLVM IR.")
+
+    finally:
+        # Prevent tmp leaks
+        try:
+            os.remove(input_path)
+        except Exception:
+            pass
 
 
 # Generate NVPTX, AMDGPU or SPIR-V.
@@ -408,20 +429,27 @@ def compile_triton_ir(
                 tmp_file.flush()
                 tmp_path = tmp_file.name
 
-            result = subprocess.run(
-                ["python3", tmp_path],
-                capture_output=True,
-                text=True,
-                env=env,
-                timeout=20,
-            )
-
-            os.remove(tmp_path)
-
-            if result.returncode != 0:
+            try:
+                result = subprocess.run(
+                    ["python3", tmp_path],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    timeout=60,
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e:
                 shutil.rmtree(cache_dir, ignore_errors=True)
-                logger.exception("User code execution failed.")
+                logger.error(
+                    f"Triton code execution failed:\n{e.stderr}", exc_info=True
+                )
                 raise TritonExecutionError("Triton code execution raised an exception.")
+            finally:
+                # Prevent tmp leaks
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
 
             cached_triton_runs[code_hash] = {"cache_dir": cache_dir, "active_users": 0}
 
