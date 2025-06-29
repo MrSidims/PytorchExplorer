@@ -723,11 +723,13 @@ export default function ExplorerContent() {
                       display: "flex",
                       flexDirection: "column",
                       flex:
-                        layout === "horizontal"
-                          ? "1 1 calc(50% - 6px)"
-                          : "0 0 auto",
+                        irWin.collapsed
+                          ? "0 0 auto"
+                          : layout === "horizontal"
+                            ? "1 1 calc(50% - 6px)"
+                            : "0 0 auto",
                       minWidth: layout === "horizontal" ? "30%" : "auto",
-                      height: "100%",
+                      height: irWin.collapsed ? "auto" : "100%",
                       boxSizing: "border-box",
                       minHeight: 0,
                     }}
