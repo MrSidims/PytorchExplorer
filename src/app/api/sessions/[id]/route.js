@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 
 export async function GET(req, { params }) {
-  const { id } = params;
+  const { id } = await params;
 
   try {
     const raw = await fs.readFile(
