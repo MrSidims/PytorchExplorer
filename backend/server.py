@@ -171,20 +171,20 @@ def apply_optional_passes(
         tool_path = None
 
         if tool == "torch-mlir-opt":
-            tool_path = TORCH_MLIR_OPT_PATH + "torch-mlir-opt"
+            tool_path = os.path.join(TORCH_MLIR_OPT_PATH, "torch-mlir-opt")
         elif tool == "mlir-opt":
-            tool_path = LLVM_BIN_PATH + "mlir-opt"
+            tool_path = os.path.join(LLVM_BIN_PATH, "mlir-opt")
         elif tool == "mlir-translate":
-            tool_path = LLVM_BIN_PATH + "mlir-translate"
+            tool_path = os.path.join(LLVM_BIN_PATH, "mlir-translate")
         elif tool == "opt":
             flags += " -S"
-            tool_path = LLVM_BIN_PATH + "opt"
+            tool_path = os.path.join(LLVM_BIN_PATH, "opt")
         elif tool == "llc":
-            tool_path = LLVM_BIN_PATH + "llc"
+            tool_path = os.path.join(LLVM_BIN_PATH, "llc")
         elif tool == "triton-opt":
-            tool_path = TRITON_OPT_PATH + "triton-opt"
+            tool_path = os.path.join(TRITON_OPT_PATH, "triton-opt")
         elif tool == "triton-llvm-opt":
-            tool_path = TRITON_OPT_PATH + "triton-llvm-opt"
+            tool_path = os.path.join(TRITON_OPT_PATH, "triton-llvm-opt")
         elif tool == "user-tool":
             tokens = split_cmd_arguments(flags)
             if not tokens:
@@ -305,7 +305,7 @@ def lower_to_llvm_mlir(model, example_input) -> str:
         input_path = f.name
 
     cmd = [
-        LLVM_BIN_PATH + "mlir-opt",
+        os.path.join(LLVM_BIN_PATH, "mlir-opt"),
         '--one-shot-bufferize="bufferize-function-boundaries"',
         "-convert-linalg-to-loops",
         "-convert-scf-to-cf",
@@ -361,7 +361,11 @@ def generate_llvm_ir(
             input_path = f.name
 
         result = subprocess.run(
-            [LLVM_BIN_PATH + "mlir-translate", "--mlir-to-llvmir", input_path],
+            [
+                os.path.join(LLVM_BIN_PATH, "mlir-translate"),
+                "--mlir-to-llvmir",
+                input_path,
+            ],
             capture_output=True,
             text=True,
             check=True,
