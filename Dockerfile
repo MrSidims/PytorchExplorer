@@ -33,6 +33,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 COPY --chown=10001:10001 . /app
 
 # Install JS dependencies, then install 'concurrently' globally
+WORKDIR /app
 RUN npm install && \
     npm install -g concurrently
 
@@ -59,4 +60,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s \
   CMD curl -f http://localhost:8000/health || exit 1
 
 # Default to interactive shell
-CMD ["/bin/sh"]
+CMD ["npm", "run", "start:all"]

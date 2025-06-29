@@ -5,8 +5,8 @@
   "scripts": {
     "dev:ui": "next dev",
     "start:ui": "next start -p 3000",
-    "dev:api": "./mlir_venv/bin/python -m uvicorn backend.server:app --host 0.0.0.0 --port 8000 --reload",
-    "start:api": "./mlir_venv/bin/python -m uvicorn backend.server:app --host 0.0.0.0 --port 8000",
+    "dev:api": "python -m uvicorn backend.server:app --host 0.0.0.0 --port 8000 --reload",
+    "start:api": "python -m uvicorn backend.server:app --host 0.0.0.0 --port 8000",
     "dev:all": "concurrently \"npm run dev:ui\" \"npm run dev:api\"",
     "start:all": "concurrently \"npm run start:ui\" \"npm run start:api\"",
     "build": "next build",

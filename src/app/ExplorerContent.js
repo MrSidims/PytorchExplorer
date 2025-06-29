@@ -398,8 +398,13 @@ export default function ExplorerContent() {
       dump_after_each_opt: exploring ? true : irWin.dumpAfterEachOpt,
     };
 
+    const apiBase =
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      (typeof window !== "undefined"
+        ? "http://" + window.location.hostname + ":8000"
+        : "http://localhost:8000");
     const response = await fetch(
-      "http://" + window.location.hostname + ":8000/generate_ir",
+      `${apiBase}/generate_ir`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

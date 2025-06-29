@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+RUN addgroup -g 10001 -S appuser && adduser -S -u 10001 -G appuser appuser
+
+WORKDIR /app
+
+COPY --chown=appuser:appuser package*.json ./
+COPY --chown=appuser:appuser next.config.mjs ./
+RUN npm ci
+
+COPY --chown=appuser:appuser public ./public
+COPY --chown=appuser:appuser src ./src
+
+RUN npm run build
+
+EXPOSE 3000
+USER appuser
+CMD ["npm", "run", "start:ui"]
