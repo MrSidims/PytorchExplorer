@@ -33,6 +33,9 @@ service**—either by
 | `LLVM_BIN_PATH` | Directory that contains `mlir-opt`, `mlir-translate`, `opt`, `llc` | `/opt/llvm/bin/` |
 | `TRITON_OPT_PATH` | Directory that contains `triton-opt`, `triton-llvm-opt` | `/opt/triton/bin/` |
 
+For the reference React UI (and any client based on it) set `NEXT_PUBLIC_BACKEND_URL`
+to point at the running backend instance when they live on different machines.
+
 If unset, the backend assumes the tools are discoverable on `$PATH`.
 
 ---
@@ -243,7 +246,9 @@ One can use the following TS helper as an example:
 
 ```ts
 export async function generateIR(req: Record<string, unknown>): Promise<string> {
-  const r = await fetch("http://localhost:8000/generate_ir", {
+  const backend =
+    process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+  const r = await fetch(`${backend}/generate_ir`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -262,7 +267,9 @@ or full mock page.js implementation:
 import React, { useEffect } from "react";
 
 export async function generateIR(req) {
-  const r = await fetch("http://localhost:8000/generate_ir", {
+  const backend =
+    process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+  const r = await fetch(`${backend}/generate_ir`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),

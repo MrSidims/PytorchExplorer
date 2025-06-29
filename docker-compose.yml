@@ -1,0 +1,22 @@
+version: '3'
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      - TORCH_MLIR_OPT_PATH=/usr/lib/llvm-21/bin/
+      - LLVM_BIN_PATH=/usr/lib/llvm-21/bin/
+      - TRITON_OPT_PATH=/usr/local/bin/
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    depends_on:
+      - backend
+    environment:
+      - NEXT_PUBLIC_BACKEND_URL=http://backend:8000
+    ports:
+      - "3000:3000"

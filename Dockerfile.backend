@@ -1,0 +1,40 @@
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DEFAULT_TIMEOUT=100
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      ca-certificates wget curl gnupg lsb-release software-properties-common && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN useradd -u 10001 -m --shell /usr/sbin/nologin appuser && \
+    mkdir -p /home/appuser/.cache
+
+RUN wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 21 && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+      libmlir-21-dev mlir-21-tools && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --chown=10001:10001 backend /app/backend
+
+RUN python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
+    /opt/venv/bin/pip install --pre torch-mlir torchvision \
+      --extra-index-url=https://download.pytorch.org/whl/nightly/cpu \
+      -f https://github.com/llvm/torch-mlir-release/releases/expanded_assets/dev-wheels && \
+    /opt/venv/bin/pip install fastapi uvicorn pydantic
+
+RUN chown -R appuser:appuser /home/appuser/.cache /app
+
+USER appuser
+
+ENV PATH="/opt/venv/bin:/usr/lib/llvm-21/bin:$PATH"
+
+EXPOSE 8000
+CMD ["uvicorn", "backend.server:app", "--host", "0.0.0.0", "--port", "8000"]

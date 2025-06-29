@@ -89,11 +89,33 @@ npm run start:all
 
 Then open http://localhost:3000/ in your browser and enjoy!
 
+#### Backend and frontend on different machines
+
+Start the backend on the machine that has all compiler tools installed:
+
+```bash
+npm run start:api      # or npm run dev:api for development
+```
+
+On the machine running the UI, point the frontend to that backend via the
+`NEXT_PUBLIC_BACKEND_URL` environment variable and start only the UI part:
+
+```bash
+export NEXT_PUBLIC_BACKEND_URL=http://<backend-host>:8000
+npm run dev:ui         # or npm run start:ui after `npm run build`
+```
+
 #### Run in a container (Docker or Podman)
 
-Build the image (change APP_ENV between development/production, default is production):
+Build the single image (change `APP_ENV` between development/production, default is production):
 ```bash
 docker build -t pytorch_explorer --build-arg APP_ENV=development .
+```
+
+Alternatively build dedicated images for the UI and API:
+```bash
+docker build -f Dockerfile.backend -t pytorch_explorer_backend .
+docker build -f Dockerfile.frontend -t pytorch_explorer_frontend .
 ```
 
 Run the container in **production mode**:
@@ -118,6 +140,12 @@ Then inside the container:
 npm run dev:all
 ```
 
+To run the UI and API in separate containers using docker compose:
+```bash
+docker compose build
+docker compose up
+```
+
 Secure run (in cases, when you don't trust tested samples):
 ```bash
 podman run --rm -it \
@@ -133,10 +161,12 @@ podman run --rm -it \
 
 ### Run the tests
 
-With the application (or just backend) started, run:
+With the backend running you can execute the Python tests. Point them at the
+backend via the optional `API_URL` environment variable if it isn't on
+`localhost:8000`:
 
 ```bash
-pytest tests -v
+API_URL=http://<backend-host>:8000 pytest tests -v
 ```
 
 ## User manual

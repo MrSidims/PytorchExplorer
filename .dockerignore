@@ -1,0 +1,7 @@
+.git
+tests
+StoredSessions
+node_modules
+mlir_venv
+__pycache__
+*.log

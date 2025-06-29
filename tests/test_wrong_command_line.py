@@ -1,7 +1,8 @@
+import os
 import httpx
 import pytest
 
-BASE_URL = "http://localhost:8000/generate_ir"
+BASE_URL = os.environ.get("API_URL", "http://localhost:8000/generate_ir")
 
 pytorch_code = """
 import torch

@@ -59,7 +59,8 @@ add_kernel[grid](x, y, z, N)
         "dump_after_each_opt": False,
     }
 
-    response = httpx.post("http://localhost:8000/generate_ir", json=payload)
+    api_url = os.environ.get("API_URL", "http://localhost:8000/generate_ir")
+    response = httpx.post(api_url, json=payload)
     assert response.status_code == 200
     assert "tt.func public @add_kernel" in response.json()["output"]
     assert "test mock_opt 42" in response.json()["output"]
