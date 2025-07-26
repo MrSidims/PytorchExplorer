@@ -1,12 +1,25 @@
 #!/bin/bash
 set -e
 
-echo "Installing LLVM 21 and MLIR tools..."
-wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 21
-sudo apt-get install -y libmlir-21-dev mlir-21-tools
+echo "Installing LLVM 22 and MLIR tools..."
+#!/bin/bash
+set -e
 
-echo "Exporting LLVM 21 tools path..."
-export PATH=/usr/lib/llvm-21/bin:$PATH
+export LLVM_VERSION=22
+echo "Installing LLVM $LLVM_VERSION"
+
+curl -L "https://apt.llvm.org/llvm-snapshot.gpg.key" | sudo apt-key add -
+echo "deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy main" | sudo tee -a /etc/apt/sources.list
+
+sudo apt-get update
+sudo apt-get update
+sudo apt-get -y install \
+    llvm-22-dev \
+    llvm-22-tools \
+    mlir-22-tools
+
+echo "Exporting LLVM 22 tools path..."
+export PATH=/usr/lib/llvm-22/bin:$PATH
 
 echo "Installing Python tools..."
 sudo apt install -y python3-pip python3.11-venv
