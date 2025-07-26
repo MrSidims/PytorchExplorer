@@ -51,8 +51,8 @@ jobs:
       - name: Set up backend dependencies
         run: bash setup_backend.sh
 
-      - name: Prepend LLVM 21 to PATH
-        run: echo "/usr/lib/llvm-21/bin" >> $GITHUB_PATH
+      - name: Prepend LLVM 22 to PATH
+        run: echo "/usr/lib/llvm-22/bin" >> $GITHUB_PATH
 
       - name: Set up frontend
         run: bash setup_frontend.sh

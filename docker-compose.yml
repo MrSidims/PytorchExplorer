@@ -7,8 +7,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - TORCH_MLIR_OPT_PATH=/usr/lib/llvm-21/bin/
-      - LLVM_BIN_PATH=/usr/lib/llvm-21/bin/
+      - TORCH_MLIR_OPT_PATH=/usr/lib/llvm-22/bin/
+      - LLVM_BIN_PATH=/usr/lib/llvm-22/bin/
       - TRITON_OPT_PATH=/usr/local/bin/
   frontend:
     build:

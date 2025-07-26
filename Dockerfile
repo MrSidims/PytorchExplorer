@@ -19,14 +19,17 @@ RUN apt-get update && \
       ca-certificates wget curl gnupg lsb-release software-properties-common && \
     rm -rf /var/lib/apt/lists/*
 
-# Add LLVM 21 repository
-RUN wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 21
+# Add LLVM 22 repository
+RUN curl -L https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
+    echo "deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy main" >> /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get -y install llvm-22-dev llvm-22-tools mlir-22-tools && \
+    rm -rf /var/lib/apt/lists/*
 
 # Add Node.js 20 repository and install runtime deps
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get update && \
-    apt-get install -y --no-install-recommends \
-      libmlir-21-dev mlir-21-tools nodejs && \
+    apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy application code
@@ -52,7 +55,7 @@ RUN useradd -u 10001 -m --shell /usr/sbin/nologin appuser && \
 USER appuser
 
 # Update PATH for venv and LLVM
-ENV PATH="/opt/venv/bin:/usr/lib/llvm-21/bin:$PATH"
+ENV PATH="/opt/venv/bin:/usr/lib/llvm-22/bin:$PATH"
 
 # Expose ports and add healthcheck
 EXPOSE 3000 8000
