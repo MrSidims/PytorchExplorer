@@ -86,7 +86,9 @@ def extract_model_input_pairs(code: str):
                 exec(code, exec_globals)
         except Exception as e:
             logger.exception("User code execution failed in extract_model_input_pairs")
-            raise PytorchExecutionError("Code raised an exception during exploration.")
+            raise PytorchExecutionError(
+                f"Code raised an exception during exploration: {e}"
+            ) from e
 
     # If no __explore__ calls found, try matching models and tensors heuristically.
     if not explore_pairs:
@@ -231,7 +233,9 @@ def generate_torch_script_graph_ir(model, example_input, pipeline, dump_each):
         return apply_optional_passes(str(traced_model.graph), pipeline, dump_each)
     except Exception as e:
         logger.exception("Failed to generate TorchScript Graph IR.")
-        raise IRGenerationError("Failed to generate TorchScript Graph IR.")
+        raise IRGenerationError(
+            f"Failed to generate TorchScript Graph IR: {e}"
+        ) from e
 
 
 # Torch MLIR dialect.
@@ -246,7 +250,7 @@ def generate_torch_mlir(
         return apply_optional_passes(str(module), pipeline, dump_each)
     except Exception as e:
         logger.exception("Error generating Torch MLIR.")
-        raise IRGenerationError("Failed to generate Torch MLIR.")
+        raise IRGenerationError(f"Failed to generate Torch MLIR: {e}") from e
 
 
 # TOSA MLIR dialect, uses FX backend.
@@ -259,7 +263,7 @@ def generate_tosa_mlir(
         return apply_optional_passes(str(module), pipeline, dump_each)
     except Exception as e:
         logger.exception("Error generating TOSA MLIR.")
-        raise IRGenerationError("Failed to generate TOSA MLIR.")
+        raise IRGenerationError(f"Failed to generate TOSA MLIR: {e}") from e
 
 
 # Linalg on tensors, uses FX backend.
@@ -274,7 +278,9 @@ def generate_linalg_on_tensors_mlir(
         return apply_optional_passes(str(module), pipeline, dump_each)
     except Exception as e:
         logger.exception("Error generating Linalg on Tensors MLIR.")
-        raise IRGenerationError("Failed to generate Linalg on Tensors MLIR.")
+        raise IRGenerationError(
+            f"Failed to generate Linalg on Tensors MLIR: {e}"
+        ) from e
 
 
 # StableHLO, uses FX backend.
@@ -289,7 +295,7 @@ def generate_stablehlo_mlir(
         return apply_optional_passes(str(module), pipeline, dump_each)
     except Exception as e:
         logger.exception("Error generating StableHLO MLIR.")
-        raise IRGenerationError("Failed to generate StableHLO MLIR.")
+        raise IRGenerationError(f"Failed to generate StableHLO MLIR: {e}") from e
 
 
 # First generate linalg on tensors, then run conversion to LLVM MLIR pipeline.
@@ -345,7 +351,7 @@ def generate_llvm_mlir(
         return apply_optional_passes(base_ir, pipeline, dump_each)
     except Exception as e:
         logger.exception("Error generating LLVM MLIR.")
-        raise IRGenerationError("Failed to generate LLVM MLIR.")
+        raise IRGenerationError(f"Failed to generate LLVM MLIR: {e}") from e
 
 
 # First generate LLVM MLIR and then translate it to LLVM IR.
@@ -380,7 +386,7 @@ def generate_llvm_ir(
 
     except Exception as e:
         logger.exception("Error generating LLVM IR.")
-        raise IRGenerationError("Failed to generate LLVM IR.")
+        raise IRGenerationError(f"Failed to generate LLVM IR: {e}") from e
 
     finally:
         # Prevent tmp leaks
@@ -404,7 +410,7 @@ def generate_target_gpu_ir(model, example_input, target: str) -> str:
         return apply_optional_passes(llvm_ir_module, pipeline, False)
     except Exception as e:
         logger.exception("Error generating LLVM IR.")
-        raise IRGenerationError("Failed to generate LLVM IR.")
+        raise IRGenerationError(f"Failed to generate LLVM IR: {e}") from e
 
 
 # TODO: Figure out static compilation.
@@ -447,7 +453,9 @@ def compile_triton_ir(
                 logger.error(
                     f"Triton code execution failed:\n{e.stderr}", exc_info=True
                 )
-                raise TritonExecutionError("Triton code execution raised an exception.")
+                raise TritonExecutionError(
+                    f"Triton code execution raised an exception: {e.stderr}"
+                ) from e
             finally:
                 # Prevent tmp leaks
                 try:
@@ -471,7 +479,9 @@ def compile_triton_ir(
         files = glob.glob(os.path.join(cache_dir, "**", pattern), recursive=True)
 
         if not files:
-            raise TritonExecutionError("Triton code execution failed.")
+            raise TritonExecutionError(
+                "Triton code execution failed: IR files not found"
+            )
 
         output_parts = []
         for file_path in sorted(files):
@@ -485,7 +495,7 @@ def compile_triton_ir(
 
     except Exception as e:
         logger.exception("Error generating Triton IR.")
-        raise TritonCompilationError("Failed to compile Triton IR.")
+        raise TritonCompilationError(f"Failed to compile Triton IR: {e}") from e
 
 
 # Helper for custom pipeline.
@@ -547,8 +557,8 @@ def process_model(request: CodeRequest) -> str:
             except Exception as e:
                 logger.exception("User code with manual IR print execution failed.")
                 raise PytorchExecutionError(
-                    "Code raised an exception during execution."
-                )
+                    f"Code raised an exception during execution: {e}"
+                ) from e
 
         if request.ir_type == "raw_ir":
             return apply_optional_passes(
