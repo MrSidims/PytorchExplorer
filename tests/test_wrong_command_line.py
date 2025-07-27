@@ -40,9 +40,10 @@ def test_wrong_command_line(ir_type):
     data = r.json()
     assert data["status"] == "error"
 
-    assert data["message"] == (
-        "Unhandled exception while processing request: Failed to generate LLVM MLIR."
+    assert data["message"].startswith(
+        "Unhandled exception while processing request: Failed to generate LLVM MLIR"
     )
+    assert "llc" in data["message"] or "Compiler tool" in data["message"]
     assert "Traceback (most recent call last)" in data["detail"]
     assert "CompilerPipelineError" in data["detail"]
     assert "llc" in data["detail"]
