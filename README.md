@@ -43,7 +43,15 @@ tracing models through various IR stages and transformations.
 
 To setup PyTorch and Torch-MLIR it's a good idea to visit https://github.com/llvm/torch-mlir repository and follow instructions from there.
 
-Current version of the application is tested on Ubuntu 22.04 windows subsystem using LLVM 21 dev.
+Current version of the application is tested on Ubuntu 22.04 windows subsystem using LLVM 22 dev.
+
+Triton requires that PyTorch be compiled with CUDA or ROCm support. When
+installing PyTorch, pick the desired accelerator build. For example, to install
+a CUDA 12.4 wheel you can run (note: this is not included in scripts and dockerfiles):
+
+```bash
+pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu124
+```
 
 ### Install dependencies
 
@@ -75,11 +83,16 @@ To use custom builds of `torch-mlir-opt`, `mlir-opt`, etc. without placing them 
 
 ### Run the application
 
+If you are reused `setup_backend.sh` script - activate the environment with
+
+```bash
+source mlir_venv/bin/activate
+```
+
 #### Development mode (local)
 ```bash
 npm run dev:all
 ```
-Then open http://localhost:3000/
 
 #### Production mode (local)
 ```bash
@@ -122,11 +135,6 @@ Run the container in **production mode**:
 ```bash
 docker run -p 3000:3000 -p 8000:8000 pytorch_explorer
 ```
-Then inside the container:
-```bash
-npm run build
-npm run start:all
-```
 
 To run in **development mode**:
 ```bash
@@ -134,10 +142,6 @@ docker run -it --rm \
   -e NODE_ENV=development \
   -p 3000:3000 -p 8000:8000 \
   pytorch_explorer
-```
-Then inside the container:
-```bash
-npm run dev:all
 ```
 
 To run the UI and API in separate containers using docker compose:
@@ -171,7 +175,24 @@ API_URL=http://<backend-host>:8000 pytest tests -v
 
 ## User manual
 
-TBD
+The interface features a code editor on the left and one or more **IR windows**
+on the right.
+
+1. Choose **PyTorch**, **Triton** or **Raw IR** from the language selector above
+   the editor and enter your code. Use **Add Source** to work with multiple
+   snippets at once.
+2. Each window on the right picks a target IR from its drop‑down. Create extra
+   windows via **Add IR Window** and switch between vertical or horizontal layout
+   using the layout selector.
+3. Click **Add Pass** inside a window to build a custom pipeline with tools such
+   as `torch-mlir-opt`, `mlir-opt`, `mlir-translate`, `opt`, `llc` or a
+   user-specified tool. Toggle **Print IR after opts** to see intermediate IR and
+   use the magnifying glass button to inspect a single stage.
+4. Press **Generate IR on All Windows** to compile the active source and fill
+   each window with the resulting IR. Windows can be collapsed or closed
+   individually.
+5. Hit **Store Session** to save your work. The backend returns a short ID which
+   can be appended to the URL (e.g. `/abc123`) to reload the same session later.
 
 ## Implementation details
 
