@@ -38,8 +38,8 @@ tracing models through various IR stages and transformations.
 - Node.js + npm
 - PyTorch
 - Torch-MLIR
-- Triton
 - LLVM with mlir-opt
+- Triton
 
 To setup PyTorch and Torch-MLIR it's a good idea to visit https://github.com/llvm/torch-mlir repository and follow instructions from there.
 
@@ -47,10 +47,10 @@ Current version of the application is tested on Ubuntu 22.04 windows subsystem u
 
 Triton requires that PyTorch be compiled with CUDA or ROCm support. When
 installing PyTorch, pick the desired accelerator build. For example, to install
-a CUDA 12.4 wheel you can run (note: this is not included in scripts and dockerfiles):
+a CUDA 12.8 wheel you can run (note: this is not included in scripts and dockerfiles) (at least this works with my Blackwell GPU):
 
 ```bash
-pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu124
+pip install --pre torch torchvision --extra-index-url https://download.pytorch.org/whl/cu128
 ```
 
 ### Install dependencies
@@ -61,12 +61,24 @@ git clone https://github.com/MrSidims/PytorchExplorer.git
 cd PytorchExplorer
 ```
 
+To use custom builds of `torch-mlir-opt`, `mlir-opt`, etc. without placing them in your `$PATH`, configure the following environment variables:
+- `TORCH_MLIR_OPT_PATH`
+- `LLVM_BIN_PATH`
+- `TRITON_OPT_PATH`
+- `PYTORCH_INDEX` – Index URL for installing PyTorch. Defaults to nightly CPU wheels.
+
+For example, to install CUDA-enabled nightly wheels (CUDA 12.8):
+```bash
+PYTORCH_INDEX=https://download.pytorch.org/whl/nightly/cu128 \
+  source setup_backend.sh
+```
+
 Install frontend dependencies:
 ```bash
 source setup_frontend.sh
 ```
 
-Set up backend (Torch, MLIR, etc.):
+Set up backend (Torch, MLIR, etc.) (note, unless `PYTORCH_INDEX` is set the script will install CPU wheels):
 ```bash
 source setup_backend.sh
 ```
@@ -75,11 +87,6 @@ If you already have a working venv for Torch-MLIR, you can just install FastAPI 
 ```bash
 pip install fastapi uvicorn pytest httpx
 ```
-
-To use custom builds of `torch-mlir-opt`, `mlir-opt`, etc. without placing them in your `$PATH`, configure the following environment variables:
-- `TORCH_MLIR_OPT_PATH`
-- `LLVM_BIN_PATH`
-- `TRITON_OPT_PATH`
 
 ### Run the application
 
@@ -221,4 +228,3 @@ For more details about IR lowering, please see [PyTorch Lowerings](docs/pytorch_
 ## Integration with your frontend or backend
 
 Refer to the [Integration Guide](docs/integration_guide.md) for details on the API contracts and communication between the frontend and backend used in this project.
-

@@ -131,4 +131,11 @@ Each stage can optionally be configured to **dump intermediate IR**, making the 
 
 ---
 
-For Triton models, see the separate section on `compile_triton_ir`, which handles IR extraction from the Triton JIT cache.
+For Triton models, see the separate section on `compile_triton_ir`, which handles IR extraction from the Triton JIT cache. Supported
+`ir_type` values include:
+
+- `triton_ir` – Triton compiler dump (`*.ttir`)
+- `triton_gpu_ir` – `*.ttgir`
+- `triton_llvm_ir` – `*.llir`
+- `triton_nvptx` – `*.ptx`
+- `triton_amdgpu` – `*.hsaco`

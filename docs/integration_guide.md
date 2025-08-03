@@ -1,5 +1,5 @@
 # PyTorch Explorer — Integration Guide
-*(last updated : 2025-06-04, commit: 5c5c42)*
+*(last updated : 2025-08-03)*
 
 This document explains **how to integrate with the PyTorch explorer as IR-Playground compiler
 service**—either by
@@ -32,6 +32,7 @@ service**—either by
 | `TORCH_MLIR_OPT_PATH` | Directory ending with `/` that contains `torch-mlir-opt` | `/opt/llvm/bin/` |
 | `LLVM_BIN_PATH` | Directory that contains `mlir-opt`, `mlir-translate`, `opt`, `llc` | `/opt/llvm/bin/` |
 | `TRITON_OPT_PATH` | Directory that contains `triton-opt`, `triton-llvm-opt` | `/opt/triton/bin/` |
+| `PYTORCH_INDEX` | Extra index URL used by `setup_backend.sh` to install PyTorch | `https://download.pytorch.org/whl/nightly/cpu` |
 
 For the reference React UI (and any client based on it) set `NEXT_PUBLIC_BACKEND_URL`
 to point at the running backend instance when they live on different machines.
@@ -122,6 +123,7 @@ Calling this is optional but keeps /tmp tidy on long-running servers.
 |  | triton_gpu_ir | *.ttgir | |
 |  | triton_llvm_ir | *.llir | |
 |  | triton_nvptx | *.ptx | |
+|  | triton_amdgpu | *.hsaco | |
 | Raw | raw_ir | Echo-style (no generation) | |
 
 ## 4. ️**Backend internals (reference implementation)**
@@ -238,7 +240,7 @@ GET /version  ->  "ir-backend 1.1.0-rust"
 
 - New dialect -> implement `generate_<dialect>()`, register it in `process_model`, add value to §3 and to the frontend dropdown.
 - New compiler tool -> add a clause in `apply_optional_passes`.
-- Timeouts / resource limits -> see `compile_triton_ir(... timeout=20)`.
+- Timeouts / resource limits -> see `compile_triton_ir(... timeout=60)`.
 
 ## 8. ️**Appendix — 20-line TypeScript helper**
 

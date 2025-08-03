@@ -20,6 +20,8 @@ model = MyModel()
 example_input = torch.randn(4, 4)
 # If you have multiple models, wrap each model and input tensor pair using:
 # __explore__(model, input_tensor)
+# To used your own means to compile Triton IR, please
+# select raw IR output.
 `;
 
 const defaultTritonCode = `import triton
@@ -45,6 +47,8 @@ z = torch.empty_like(x)
 
 grid = lambda meta: (triton.cdiv(N, BLOCK_SIZE),)
 add_kernel[grid](x, y, z, N)
+# To used your own means to compile Triton IR, please
+# select raw IR output.
 `;
 
 const defaultRawIRCode = `module {
@@ -90,6 +94,8 @@ const tritonIROptions = [
   { value: "triton_gpu_ir", label: "Triton GPU IR" },
   { value: "triton_llvm_ir", label: "LLVM IR" },
   { value: "triton_nvptx", label: "NVPTX" },
+  { value: "triton_amdgpu", label: "ROCm" },
+  { value: "raw_ir", label: "Raw IR Output" },
 ];
 
 const rawIROptions = [{ value: "raw_ir", label: "Raw IR Output" }];
@@ -554,8 +560,8 @@ export default function ExplorerContent() {
               style={{ margin: "10px 0" }}
             >
               <option value="pytorch">PyTorch</option>
+              <option value="triton">Triton</option>
               <option value="raw_ir">Raw IR Input</option>
-              <option value="triton">Triton (experimental support)</option>
             </select>
             <div
               style={{

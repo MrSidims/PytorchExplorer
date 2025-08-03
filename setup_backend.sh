@@ -30,9 +30,13 @@ source mlir_venv/bin/activate
 
 echo "Installing torch-mlir and dependencies..."
 pip install --upgrade pip
+PYTORCH_INDEX="${PYTORCH_INDEX:-https://download.pytorch.org/whl/nightly/cpu}"
 pip install --pre torch-mlir torchvision \
-	  --extra-index-url https://download.pytorch.org/whl/nightly/cpu \
+	  --extra-index-url "$PYTORCH_INDEX" \
 	    -f https://github.com/llvm/torch-mlir-release/releases/expanded_assets/dev-wheels
+
+echo "Installing Triton..."
+pip install triton
 
 echo "Installing FastAPI and Uvicorn..."
 pip install fastapi uvicorn
