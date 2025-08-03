@@ -234,9 +234,7 @@ def generate_torch_script_graph_ir(model, example_input, pipeline, dump_each):
         return apply_optional_passes(str(traced_model.graph), pipeline, dump_each)
     except Exception as e:
         logger.exception("Failed to generate TorchScript Graph IR.")
-        raise IRGenerationError(
-            f"Failed to generate TorchScript Graph IR: {e}"
-        ) from e
+        raise IRGenerationError(f"Failed to generate TorchScript Graph IR: {e}") from e
 
 
 # Torch MLIR dialect.
@@ -546,12 +544,10 @@ def process_model(request: CodeRequest) -> str:
             # If raw IR is requested, we execute the user code directly.
             # Prepare a fake file for linecache to make
             # inspect.getsourcelines() work.
-            fake_name   = "<string>"
+            fake_name = "<string>"
             source_code = request.code
-            lines       = [ln + "\n" for ln in source_code.splitlines()]
-            linecache.cache[fake_name] = (
-               len(source_code), None, lines, fake_name
-            )
+            lines = [ln + "\n" for ln in source_code.splitlines()]
+            linecache.cache[fake_name] = (len(source_code), None, lines, fake_name)
             # Execute user code, capture stdout.
             try:
                 with tempfile.TemporaryDirectory() as tmpdir:
@@ -569,9 +565,7 @@ def process_model(request: CodeRequest) -> str:
                     captured, build_pipeline(request), request.dump_after_each_opt
                 )
             except Exception as e:
-                logger.exception(
-                    "User code with manual IR print execution failed."
-                )
+                logger.exception("User code with manual IR print execution failed.")
                 if request.selected_language == "pytorch":
                     raise PytorchExecutionError(
                         f"Code raised an exception during execution: {e}"
