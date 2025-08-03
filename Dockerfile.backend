@@ -15,10 +15,10 @@ RUN apt-get update && \
 RUN useradd -u 10001 -m --shell /usr/sbin/nologin appuser && \
     mkdir -p /home/appuser/.cache
 
-RUN wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 21 && \
+RUN wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- 22 && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-      libmlir-21-dev mlir-21-tools && \
+      libmlir-22-dev mlir-22-tools && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --chown=10001:10001 backend /app/backend
@@ -28,13 +28,13 @@ RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --pre torch-mlir torchvision \
       --extra-index-url=https://download.pytorch.org/whl/nightly/cpu \
       -f https://github.com/llvm/torch-mlir-release/releases/expanded_assets/dev-wheels && \
-    /opt/venv/bin/pip install fastapi uvicorn pydantic
+    /opt/venv/bin/pip install triton fastapi uvicorn pydantic
 
 RUN chown -R appuser:appuser /home/appuser/.cache /app
 
 USER appuser
 
-ENV PATH="/opt/venv/bin:/usr/lib/llvm-21/bin:$PATH"
+ENV PATH="/opt/venv/bin:/usr/lib/llvm-22/bin:$PATH"
 
 EXPOSE 8000
 CMD ["uvicorn", "backend.server:app", "--host", "0.0.0.0", "--port", "8000"]

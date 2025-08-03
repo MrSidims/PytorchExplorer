@@ -46,7 +46,7 @@ RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --pre torch-mlir torchvision \
       --extra-index-url=https://download.pytorch.org/whl/nightly/cpu \
       -f https://github.com/llvm/torch-mlir-release/releases/expanded_assets/dev-wheels && \
-    /opt/venv/bin/pip install fastapi uvicorn pytest httpx
+    /opt/venv/bin/pip install triton fastapi uvicorn pytest httpx
 
 # Create non-root user and fix permissions
 RUN useradd -u 10001 -m --shell /usr/sbin/nologin appuser && \

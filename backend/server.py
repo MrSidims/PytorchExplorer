@@ -1,6 +1,7 @@
 import subprocess
 import tempfile
 import os
+import linecache
 import glob
 import uuid
 import hashlib
@@ -413,7 +414,7 @@ def generate_target_gpu_ir(model, example_input, target: str) -> str:
         raise IRGenerationError(f"Failed to generate LLVM IR: {e}") from e
 
 
-# TODO: Figure out static compilation.
+# Compile Triton IR.
 def compile_triton_ir(
     code: str, ir_type: str, pipeline: List[Tuple[str, str]], dump_each: bool
 ) -> str:
@@ -470,6 +471,7 @@ def compile_triton_ir(
             "triton_gpu_ir": "*.ttgir",
             "triton_llvm_ir": "*.llir",
             "triton_nvptx": "*.ptx",
+            "triton_amdgpu": "*.hsaco",
         }
 
         pattern = pattern_map.get(ir_type)
@@ -537,8 +539,20 @@ def process_model(request: CodeRequest) -> str:
                 request.code, request.ir_type, pipeline, request.dump_after_each_opt
             )
 
-        if request.ir_type == "raw_ir" and request.selected_language == "pytorch":
-            # Execute user Python, capture stdout.
+        if request.ir_type == "raw_ir" and request.selected_language in (
+            "pytorch",
+            "triton",
+        ):
+            # If raw IR is requested, we execute the user code directly.
+            # Prepare a fake file for linecache to make
+            # inspect.getsourcelines() work.
+            fake_name   = "<string>"
+            source_code = request.code
+            lines       = [ln + "\n" for ln in source_code.splitlines()]
+            linecache.cache[fake_name] = (
+               len(source_code), None, lines, fake_name
+            )
+            # Execute user code, capture stdout.
             try:
                 with tempfile.TemporaryDirectory() as tmpdir:
                     stdout_path = os.path.join(tmpdir, "captured_output.txt")
@@ -555,10 +569,17 @@ def process_model(request: CodeRequest) -> str:
                     captured, build_pipeline(request), request.dump_after_each_opt
                 )
             except Exception as e:
-                logger.exception("User code with manual IR print execution failed.")
-                raise PytorchExecutionError(
-                    f"Code raised an exception during execution: {e}"
-                ) from e
+                logger.exception(
+                    "User code with manual IR print execution failed."
+                )
+                if request.selected_language == "pytorch":
+                    raise PytorchExecutionError(
+                        f"Code raised an exception during execution: {e}"
+                    ) from e
+                else:
+                    raise TritonExecutionError(
+                        f"Triton code execution raised an exception: {e}"
+                    ) from e
 
         if request.ir_type == "raw_ir":
             return apply_optional_passes(
