@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useSession } from "./SessionContext";
 import Editor, { loader } from "@monaco-editor/react";
-import { ConfigProvider, Splitter, Collapse, Input, Tabs } from "antd";
+import { ConfigProvider, Splitter, Collapse, Input, Tabs, Modal } from "antd";
 
 const defaultPyTorchCode = `import torch
 import torch.nn as nn
@@ -105,7 +105,7 @@ export default function ExplorerContent() {
   }
 
   const activeSource = sources.find((s) => s.id === activeSourceId);
-  const { selectedLanguage, code, irWindows, customToolCmd } = activeSource;
+  const { selectedLanguage, code, irWindows } = activeSource;
 
   const [globalLoading, setGlobalLoading] = useState(false);
   const [editPassWindowId, setEditPassWindowId] = useState(null);
@@ -118,6 +118,10 @@ export default function ExplorerContent() {
     windowId: null,
     stageIdx: null,
   });
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [addTool, setAddTool] = useState("");
+  const [addFlags, setAddFlags] = useState("");
+  const [addWindowId, setAddWindowId] = useState(null);
 
   const isTriton = selectedLanguage === "triton";
   const isPytorch = selectedLanguage === "pytorch";
@@ -183,36 +187,35 @@ export default function ExplorerContent() {
           dumpAfterEachOpt: false,
         },
       ],
-      customToolCmd: {},
     };
     setSources((prev) => [...prev, template]);
     setActiveSourceId(newId);
   };
 
   const handleAddPass = (id, tool) => {
-    const flags = prompt(`Enter flags for ${tool}`);
-    if (flags !== null) {
-      updateActiveSource((s) => ({
-        ...s,
-        irWindows: s.irWindows.map((w) =>
-          w.id === id
-            ? { ...w, pipeline: [...w.pipeline, { tool, flags }] }
-            : w,
-        ),
-      }));
-    }
+    setAddWindowId(id);
+    setAddTool(tool);
+    setAddFlags("");
+    setAddModalVisible(true);
   };
 
-  const handleAddCustomTool = (windowId, flags) => {
+  const handleAddCustomTool = (windowId) => {
+    setAddWindowId(windowId);
+    setAddTool("user-tool");
+    setAddFlags("");
+    setAddModalVisible(true);
+  };
+
+  const handleAddConfirm = () => {
     updateActiveSource((s) => ({
       ...s,
       irWindows: s.irWindows.map((w) =>
-        w.id === windowId
-          ? { ...w, pipeline: [...w.pipeline, { tool: "user-tool", flags }] }
+        w.id === addWindowId
+          ? { ...w, pipeline: [...w.pipeline, { tool: addTool, flags: addFlags }] }
           : w,
       ),
-      customToolCmd: { ...s.customToolCmd, [windowId]: flags },
     }));
+    setAddModalVisible(false);
   };
 
   const handleEditPass = (windowId, index, tool, flags) => {
@@ -286,7 +289,6 @@ export default function ExplorerContent() {
           dumpAfterEachOpt: false,
         },
       ],
-      customToolCmd: {},
     }));
   };
 
@@ -943,41 +945,20 @@ export default function ExplorerContent() {
                                             llc
                                           </button>
                                         )}
+                                        {allowUserTool && (
+                                          <button
+                                            onClick={() =>
+                                              handleAddCustomTool(irWin.id)
+                                            }
+                                            className="tool-btn"
+                                          >
+                                            custom tool
+                                          </button>
+                                        )}
                                       </div>
                                     ),
                                   },
                                 ]}
-                              />
-                              <Input
-                                placeholder="Call any tool in PATH + flags, e.g. `mlir-opt -convert-scf-to-cf` or `opt -O2 -S` and press `Enter`"
-                                value={customToolCmd[irWin.id] || ""}
-                                onChange={(e) =>
-                                  updateActiveSource((s) => ({
-                                    ...s,
-                                    customToolCmd: {
-                                      ...s.customToolCmd,
-                                      [irWin.id]: e.target.value,
-                                    },
-                                  }))
-                                }
-                                onPressEnter={() => {
-                                  const flags = (
-                                    customToolCmd[irWin.id] || ""
-                                  ).trim();
-                                  if (!flags) return;
-                                  handleAddCustomTool(irWin.id, flags);
-                                  updateActiveSource((s) => ({
-                                    ...s,
-                                    customToolCmd: {
-                                      ...s.customToolCmd,
-                                      [irWin.id]: "",
-                                    },
-                                  }));
-                                }}
-                                style={{
-                                  width: "100%",
-                                  marginBottom: "10px",
-                                }}
                               />
                             </>
                           );
@@ -1198,48 +1179,67 @@ export default function ExplorerContent() {
                 ))}
               </div>
             </div>
-            {editModalVisible && (
-              <div
-                style={{
-                  position: "fixed",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  backgroundColor: "#fff",
-                  border: "1px solid #ccc",
-                  padding: "50px",
-                  borderRadius: "8px",
-                  boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-                  zIndex: 1000,
-                }}
-              >
-                <h3>Edit Compilation Pass</h3>
-                <input
-                  type="text"
-                  value={editFlags}
-                  onChange={(e) => setEditFlags(e.target.value)}
-                  style={{ width: "100%", marginBottom: "10px" }}
-                />
+              {editModalVisible && (
                 <div
                   style={{
-                    display: "flex",
-                    gap: "200px",
-                    justifyContent: "flex-end",
+                    position: "fixed",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    backgroundColor: "#fff",
+                    border: "1px solid #ccc",
+                    padding: "50px",
+                    borderRadius: "8px",
+                    boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+                    zIndex: 1000,
                   }}
                 >
-                  <button onClick={handleUpdatePass}>Update</button>
-                  <button onClick={handleRemovePass} style={{ color: "red" }}>
-                    Remove
-                  </button>
-                  <button onClick={() => setEditModalVisible(false)}>
-                    Cancel
-                  </button>
+                  <h3>Edit Compilation Pass</h3>
+                  <input
+                    type="text"
+                    value={editFlags}
+                    onChange={(e) => setEditFlags(e.target.value)}
+                    style={{ width: "100%", marginBottom: "10px" }}
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "200px",
+                      justifyContent: "flex-end",
+                    }}
+                  >
+                    <button onClick={handleUpdatePass}>Update</button>
+                    <button onClick={handleRemovePass} style={{ color: "red" }}>
+                      Remove
+                    </button>
+                    <button onClick={() => setEditModalVisible(false)}>
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </Splitter.Panel>
-      </Splitter>
-    </ConfigProvider>
-  );
-}
+              )}
+              <Modal
+                title={
+                  addTool === "user-tool" ? "Run Custom Tool" : `Flags for ${addTool}`
+                }
+                open={addModalVisible}
+                onOk={handleAddConfirm}
+                onCancel={() => setAddModalVisible(false)}
+              >
+                <Input
+                  placeholder={
+                    addTool === "user-tool"
+                      ? "Call any tool in PATH with flags, e.g. `mlir-opt -convert-scf-to-cf`"
+                      : `Enter flags for ${addTool}`
+                  }
+                  value={addFlags}
+                  onChange={(e) => setAddFlags(e.target.value)}
+                  onPressEnter={handleAddConfirm}
+                />
+              </Modal>
+            </div>
+          </Splitter.Panel>
+        </Splitter>
+      </ConfigProvider>
+    );
+  }

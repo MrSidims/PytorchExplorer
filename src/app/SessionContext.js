@@ -42,7 +42,6 @@ example_input = torch.randn(4, 4)
           dumpAfterEachOpt: false,
         },
       ],
-      customToolCmd: {},
     },
   ]);
   const [activeSourceId, setActiveSourceId] = useState(1);
