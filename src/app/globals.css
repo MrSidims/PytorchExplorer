@@ -1,13 +1,22 @@
-:root {
+body.light {
   --background: #ffffff;
   --foreground: #171717;
+  --tool-btn-bg: #add8e6;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --tool-btn-bg: #508bb3;
+}
+
+body.cat {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --tool-btn-bg: #508bb3;
+  background-image: url("/katze.png");
+  background-repeat: repeat-x;
+  background-position: bottom;
 }
 
 html,
@@ -18,7 +27,7 @@ body {
 
 body {
   color: var(--foreground);
-  background: var(--background);
+  background-color: var(--background);
   font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -37,7 +46,7 @@ a {
 
 .tool-btn {
   padding: 6px 10px;
-  background: #add8e6;
+  background: var(--tool-btn-bg);
   border: none;
   border-radius: 5px;
   font-weight: bold;
@@ -54,10 +63,4 @@ a {
 }
 .ant-splitter-splitter:hover {
   background-color: #555;
-}
-
-@media (prefers-color-scheme: dark) {
-  .tool-btn {
-    background: #508bb3;
-  }
 }

@@ -3,7 +3,14 @@
 import React, { useEffect, useState } from "react";
 import { useSession } from "./SessionContext";
 import Editor, { loader } from "@monaco-editor/react";
-import { ConfigProvider, Splitter, Collapse, Input, Tabs } from "antd";
+import {
+  ConfigProvider,
+  Splitter,
+  Collapse,
+  Input,
+  Tabs,
+  theme as antdTheme,
+} from "antd";
 
 const defaultPyTorchCode = `import torch
 import torch.nn as nn
@@ -124,6 +131,16 @@ export default function ExplorerContent() {
     windowId: null,
     stageIdx: null,
   });
+  const [theme, setTheme] = useState("cat");
+  const panelBg = theme === "light" ? "white" : "#2d2d2d";
+  const antdAlgorithm =
+    theme === "light" ? antdTheme.defaultAlgorithm : antdTheme.darkAlgorithm;
+  const controlBg = theme === "light" ? "#ccc" : "#555";
+
+  useEffect(() => {
+    document.body.classList.remove("light", "dark", "cat");
+    document.body.classList.add(theme);
+  }, [theme]);
 
   const isTriton = selectedLanguage === "triton";
   const isPytorch = selectedLanguage === "pytorch";
@@ -166,6 +183,23 @@ export default function ExplorerContent() {
         colors: {
           "editor.foreground": "#000000",
           "editor.background": "#FFFFFF",
+        },
+      });
+
+      monaco.editor.defineTheme("mlirThemeDark", {
+        base: "vs-dark",
+        inherit: true,
+        rules: [
+          { token: "variable", foreground: "87CEFA" },
+          { token: "keyword", foreground: "FFA07A" },
+          { token: "type", foreground: "C39BD3" },
+          { token: "number", foreground: "7DCEA0" },
+          { token: "string", foreground: "F1948A" },
+          { token: "comment", foreground: "B2BABB" },
+        ],
+        colors: {
+          "editor.foreground": "#FFFFFF",
+          "editor.background": "#1E1E1E",
         },
       });
     });
@@ -457,9 +491,16 @@ export default function ExplorerContent() {
     key: `${src.id}`,
   }));
 
+  const splitterStyle = {
+    height: "calc(100vh - 8px)",
+    margin: "4px 0",
+    boxSizing: "border-box",
+  };
+
   return (
     <ConfigProvider
       theme={{
+        algorithm: antdAlgorithm,
         components: {
           Splitter: {
             splitBarSize: 4,
@@ -468,19 +509,7 @@ export default function ExplorerContent() {
         },
       }}
     >
-      <Splitter
-        layout="horizontal"
-        lazy={false}
-        style={{
-          height: "calc(100vh - 8px)",
-          margin: "4px 0",
-          boxSizing: "border-box",
-          backgroundImage: "url('katze.png')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-        }}
-      >
+      <Splitter layout="horizontal" lazy={false} style={splitterStyle}>
         {/* Left Panel */}
         <Splitter.Panel collapsible defaultSize="40%" min="200px">
           <div
@@ -490,7 +519,7 @@ export default function ExplorerContent() {
               flexDirection: "column",
               height: "98%",
               overflow: "hidden",
-              backgroundColor: "white",
+              backgroundColor: panelBg,
               opacity: 0.9,
               borderRadius: "8px",
               padding: "10px",
@@ -576,7 +605,7 @@ export default function ExplorerContent() {
                 onChange={(value) =>
                   updateActiveSource((s) => ({ ...s, code: value || "" }))
                 }
-                theme="vs-light"
+                theme={theme === "light" ? "vs-light" : "vs-dark"}
               />
             </div>
           </div>
@@ -601,25 +630,47 @@ export default function ExplorerContent() {
                 padding: "0 10px",
               }}
             >
-              <select
-                value={layout}
-                onChange={(e) => setLayout(e.target.value)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "2px",
-                  fontSize: "0.7rem",
-                  height: "30px",
-                  borderRadius: "5px",
-                  backgroundColor: "#ccc",
-                  border: "none",
-                  fontWeight: "bold",
-                }}
-              >
-                <option value="vertical">Vertical Layout</option>
-                <option value="horizontal">Horizontal Layout</option>
-              </select>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <select
+                  value={layout}
+                  onChange={(e) => setLayout(e.target.value)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "2px",
+                    fontSize: "0.7rem",
+                    height: "30px",
+                    borderRadius: "5px",
+                    backgroundColor: controlBg,
+                    border: "none",
+                    fontWeight: "bold",
+                  }}
+                >
+                  <option value="vertical">Vertical Layout</option>
+                  <option value="horizontal">Horizontal Layout</option>
+                </select>
+                <select
+                  value={theme}
+                  onChange={(e) => setTheme(e.target.value)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "2px",
+                    fontSize: "0.7rem",
+                    height: "30px",
+                    borderRadius: "5px",
+                    backgroundColor: controlBg,
+                    border: "none",
+                    fontWeight: "bold",
+                  }}
+                >
+                  <option value="cat">Cat</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </div>
               <div style={{ display: "flex", gap: "6px" }}>
                 <button
                   onClick={addWindow}
@@ -721,7 +772,7 @@ export default function ExplorerContent() {
                   <div
                     key={irWin.id}
                     style={{
-                      backgroundColor: "white",
+                      backgroundColor: panelBg,
                       borderRadius: "8px",
                       padding: "10px",
                       opacity: 0.9,
@@ -755,7 +806,7 @@ export default function ExplorerContent() {
                           style={{
                             marginRight: "8px",
                             padding: "5px",
-                            backgroundColor: "#ccc",
+                            backgroundColor: controlBg,
                             border: "none",
                             borderRadius: "5px",
                             cursor: "pointer",
@@ -992,7 +1043,8 @@ export default function ExplorerContent() {
                           <div
                             style={{
                               marginBottom: "10px",
-                              backgroundColor: "#eef",
+                              backgroundColor:
+                                theme === "light" ? "#eef" : "#444",
                               padding: "6px",
                               borderRadius: "6px",
                               fontSize: "0.8em",
@@ -1001,7 +1053,8 @@ export default function ExplorerContent() {
                             <div
                               style={{
                                 marginBottom: "4px",
-                                backgroundColor: "#eee",
+                                backgroundColor:
+                                  theme === "light" ? "#eee" : "#555",
                                 padding: "4px 4px",
                                 borderRadius: "6px",
                                 display: "flex",
@@ -1012,7 +1065,7 @@ export default function ExplorerContent() {
                             >
                               <span
                                 style={{
-                                  backgroundColor: "#ccc",
+                                  backgroundColor: controlBg,
                                   padding: "2px 4px",
                                   borderRadius: "4px",
                                   fontWeight: "bold",
@@ -1164,7 +1217,7 @@ export default function ExplorerContent() {
                               style={{
                                 flex: 1,
                                 padding: "4px",
-                                backgroundColor: "#ccc",
+                                backgroundColor: controlBg,
                                 border: "none",
                                 borderRadius: "5px",
                                 fontWeight: "bold",
@@ -1194,7 +1247,7 @@ export default function ExplorerContent() {
                                 : irWin.output
                             }
                             onChange={() => {}}
-                            theme="mlirTheme"
+                            theme={theme === "light" ? "mlirTheme" : "mlirThemeDark"}
                             options={{ readOnly: true }}
                           />
                         </div>
@@ -1211,7 +1264,7 @@ export default function ExplorerContent() {
                   top: "50%",
                   left: "50%",
                   transform: "translate(-50%, -50%)",
-                  backgroundColor: "#fff",
+                  backgroundColor: panelBg,
                   border: "1px solid #ccc",
                   padding: "50px",
                   borderRadius: "8px",
