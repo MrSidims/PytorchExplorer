@@ -64,7 +64,6 @@ class CodeRequest(BaseModel):
     triton_opt: Optional[str] = ""
     triton_llvm_opt: Optional[str] = ""
     user_tool: Optional[str] = ""
-    env_var: Optional[str] = ""
     dump_after_each_opt: Optional[bool] = False
 
 
@@ -235,7 +234,9 @@ def generate_torch_script_graph_ir(model, example_input, pipeline, dump_each):
         return apply_optional_passes(str(traced_model.graph), pipeline, dump_each)
     except Exception as e:
         logger.exception("Failed to generate TorchScript Graph IR.")
-        raise IRGenerationError(f"Failed to generate TorchScript Graph IR: {e}") from e
+        raise IRGenerationError(
+            f"Failed to generate TorchScript Graph IR: {e}"
+        ) from e
 
 
 # Torch MLIR dialect.
@@ -531,22 +532,6 @@ def build_pipeline(request: CodeRequest) -> List[Tuple[str, str]]:
 
 # Dispatcher.
 def process_model(request: CodeRequest) -> str:
-    # Apply user-provided environment variables for the duration of the request.
-    new_env = {}
-    if request.env_var:
-        for assignment in request.env_var.split("&&"):
-            assignment = assignment.strip()
-            if not assignment:
-                continue
-            if "=" not in assignment:
-                raise IRGenerationError(
-                    f"Invalid environment variable assignment: '{assignment}'"
-                )
-            key, value = assignment.split("=", 1)
-            new_env[key.strip()] = value.strip()
-
-    old_env = {k: os.environ.get(k) for k in new_env}
-    os.environ.update(new_env)
     try:
         if request.ir_type.startswith("triton"):
             pipeline = build_pipeline(request)
@@ -561,10 +546,12 @@ def process_model(request: CodeRequest) -> str:
             # If raw IR is requested, we execute the user code directly.
             # Prepare a fake file for linecache to make
             # inspect.getsourcelines() work.
-            fake_name = "<string>"
+            fake_name   = "<string>"
             source_code = request.code
-            lines = [ln + "\n" for ln in source_code.splitlines()]
-            linecache.cache[fake_name] = (len(source_code), None, lines, fake_name)
+            lines       = [ln + "\n" for ln in source_code.splitlines()]
+            linecache.cache[fake_name] = (
+               len(source_code), None, lines, fake_name
+            )
             # Execute user code, capture stdout.
             try:
                 with tempfile.TemporaryDirectory() as tmpdir:
@@ -582,7 +569,9 @@ def process_model(request: CodeRequest) -> str:
                     captured, build_pipeline(request), request.dump_after_each_opt
                 )
             except Exception as e:
-                logger.exception("User code with manual IR print execution failed.")
+                logger.exception(
+                    "User code with manual IR print execution failed."
+                )
                 if request.selected_language == "pytorch":
                     raise PytorchExecutionError(
                         f"Code raised an exception during execution: {e}"
