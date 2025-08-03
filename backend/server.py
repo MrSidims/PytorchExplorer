@@ -64,7 +64,6 @@ class CodeRequest(BaseModel):
     triton_opt: Optional[str] = ""
     triton_llvm_opt: Optional[str] = ""
     user_tool: Optional[str] = ""
-    env_var: Optional[str] = ""
     dump_after_each_opt: Optional[bool] = False
 
 
@@ -531,22 +530,6 @@ def build_pipeline(request: CodeRequest) -> List[Tuple[str, str]]:
 
 # Dispatcher.
 def process_model(request: CodeRequest) -> str:
-    # Apply user-provided environment variables for the duration of the request.
-    new_env = {}
-    if request.env_var:
-        for assignment in request.env_var.split("&&"):
-            assignment = assignment.strip()
-            if not assignment:
-                continue
-            if "=" not in assignment:
-                raise IRGenerationError(
-                    f"Invalid environment variable assignment: '{assignment}'"
-                )
-            key, value = assignment.split("=", 1)
-            new_env[key.strip()] = value.strip()
-
-    old_env = {k: os.environ.get(k) for k in new_env}
-    os.environ.update(new_env)
     try:
         if request.ir_type.startswith("triton"):
             pipeline = build_pipeline(request)
