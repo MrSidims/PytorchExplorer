@@ -11,6 +11,7 @@ import {
   Tabs,
   theme as antdTheme,
 } from "antd";
+import { DraggableWindow } from "./DraggableWindow";
 
 const defaultPyTorchCode = `import torch
 import torch.nn as nn
@@ -221,6 +222,9 @@ export default function ExplorerContent() {
           loading: false,
           pipeline: [],
           dumpAfterEachOpt: false,
+          pos: { x: 24, y: 24 },
+          size: { w: 560, h: 420 },
+          zIndex: 1,
         },
       ],
       customToolCmd: {},
@@ -324,6 +328,9 @@ export default function ExplorerContent() {
           loading: false,
           pipeline: [],
           dumpAfterEachOpt: false,
+          pos: { x: 24, y: 24 },
+          size: { w: 560, h: 420 },
+          zIndex: 1,
         },
       ],
       customToolCmd: {},
@@ -351,6 +358,9 @@ export default function ExplorerContent() {
             loading: false,
             pipeline: [],
             dumpAfterEachOpt: false,
+            pos: { x: 24, y: 24 },
+            size: { w: 560, h: 420 },
+            zIndex: 1,
           },
         ],
       };
@@ -443,31 +453,42 @@ export default function ExplorerContent() {
       (typeof window !== "undefined"
         ? "http://" + window.location.hostname + ":8000"
         : "http://localhost:8000");
-    const response = await fetch(
-      `${apiBase}/generate_ir`,
-      {
+    try {
+      const response = await fetch(`${apiBase}/generate_ir`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      },
-    );
-
-    const data = await response.json();
-    updateActiveSource((s) => ({
-      ...s,
-      irWindows: s.irWindows.map((w) =>
-        w.id === id
-          ? {
-              ...w,
-              output:
-                data.status === "ok"
-                  ? data.output
-                  : `${data.message}${data.detail ? "\n\n" + data.detail : ""}`,
-              loading: false,
-            }
-          : w,
-      ),
-    }));
+      });
+      const data = await response.json();
+      updateActiveSource((s) => ({
+        ...s,
+        irWindows: s.irWindows.map((w) =>
+          w.id === id
+            ? {
+                ...w,
+                output:
+                  data.status === "ok"
+                    ? data.output
+                    : `${data.message}${data.detail ? "\n\n" + data.detail : ""}`,
+                loading: false,
+              }
+            : w,
+        ),
+      }));
+    } catch (err) {
+      updateActiveSource((s) => ({
+        ...s,
+        irWindows: s.irWindows.map((w) =>
+          w.id === id
+            ? {
+                ...w,
+                output: `Error: ${err.message}`,
+                loading: false,
+              }
+            : w,
+        ),
+      }));
+    }
   };
 
   const generateAllIR = async () => {
@@ -485,6 +506,460 @@ export default function ExplorerContent() {
     const found = getIROptions().find((opt) => opt.value === value);
     return found ? found.label : value;
   };
+
+  function bumpZ(state, id) {
+    const nextZ = Math.max(0, ...state.irWindows.map((w) => w.zIndex || 0)) + 1;
+    return {
+      ...state,
+      irWindows: state.irWindows.map((w) =>
+        w.id === id ? { ...w, zIndex: nextZ } : w,
+      ),
+    };
+  }
+
+  function setPos(state, id, pos) {
+    return {
+      ...state,
+      irWindows: state.irWindows.map((w) => (w.id === id ? { ...w, pos } : w)),
+    };
+  }
+
+  function setSizeAndPos(state, id, size, pos) {
+    return {
+      ...state,
+      irWindows: state.irWindows.map((w) =>
+        w.id === id ? { ...w, size, pos } : w,
+      ),
+    };
+  }
+
+  function IRWindowBody({ irWin }) {
+    return (
+      <>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "10px",
+          }}
+        >
+          <div
+            className="drag-title"
+            tabIndex={0}
+            style={{ cursor: "move", flex: 1 }}
+          >
+            <h3>Output {getLabelForIR(irWin.selectedIR)}</h3>
+          </div>
+          <div>
+            <button
+              onClick={() => toggleCollapse(irWin.id)}
+              style={{
+                marginRight: "8px",
+                padding: "5px",
+                backgroundColor: controlBg,
+                border: "none",
+                borderRadius: "5px",
+                cursor: "pointer",
+              }}
+            >
+              {irWin.collapsed ? "Expand" : "Collapse"}
+            </button>
+            <button
+              onClick={() => removeWindow(irWin.id)}
+              style={{
+                backgroundColor: "#f66",
+                border: "none",
+                borderRadius: "5px",
+                cursor: "pointer",
+                padding: "5px 10px",
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        {!irWin.collapsed && (
+          <>
+            <select
+              value={irWin.selectedIR}
+              onChange={(e) => handleIRChange(irWin.id, e)}
+              style={{ marginBottom: "10px" }}
+            >
+              {getIROptions().map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {(() => {
+              // determine which built-in tool buttons to show
+              const allowTorchMlirOpt = [
+                "torch_script_graph_ir",
+                "torch_mlir",
+                "raw_ir",
+              ].includes(irWin.selectedIR);
+              const allowMlirOpt = [
+                "torch_script_graph_ir",
+                "torch_mlir",
+                "tosa_mlir",
+                "linalg_on_tensors_mlir",
+                "stablehlo_mlir",
+                "llvm_mlir",
+                "raw_ir",
+              ].includes(irWin.selectedIR);
+              const allowMlirTranslate = allowMlirOpt;
+              const allowTritonOpt = ["triton_ir", "triton_gpu_ir"].includes(
+                irWin.selectedIR,
+              );
+              const allowTritonLLVMOpt = [
+                "triton_ir",
+                "triton_gpu_ir",
+                "triton_llvm_ir",
+              ].includes(irWin.selectedIR);
+              const allowLlvmOpt = ![
+                "triton_nvptx",
+                "nvptx",
+                "amdgpu",
+                "spirv",
+              ].includes(irWin.selectedIR);
+              const allowLLC = allowLlvmOpt;
+              const allowUserTool = true;
+
+              if (
+                !allowTorchMlirOpt &&
+                !allowMlirOpt &&
+                !allowMlirTranslate &&
+                !allowTritonOpt &&
+                !allowTritonLLVMOpt &&
+                !allowLlvmOpt &&
+                !allowLLC &&
+                !allowUserTool
+              ) {
+                return null;
+              }
+
+              return (
+                <>
+                  <Collapse
+                    defaultActiveKey={["1"]}
+                    style={{ marginBottom: "10px" }}
+                    items={[
+                      {
+                        key: "tools",
+                        label: (
+                          <span
+                            style={{
+                              fontSize: "0.85rem",
+                              padding: "4px 8px",
+                            }}
+                          >
+                            Use predefined toolbar
+                          </span>
+                        ),
+                        children: (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "20px",
+                            }}
+                          >
+                            {allowTorchMlirOpt && (
+                              <button
+                                onClick={() =>
+                                  handleAddPass(irWin.id, "torch-mlir-opt")
+                                }
+                                className="tool-btn"
+                              >
+                                torch-mlir-opt
+                              </button>
+                            )}
+                            {allowMlirOpt && (
+                              <button
+                                onClick={() =>
+                                  handleAddPass(irWin.id, "mlir-opt")
+                                }
+                                className="tool-btn"
+                              >
+                                mlir-opt
+                              </button>
+                            )}
+                            {allowMlirTranslate && (
+                              <button
+                                onClick={() =>
+                                  handleAddPass(irWin.id, "mlir-translate")
+                                }
+                                className="tool-btn"
+                              >
+                                mlir-translate
+                              </button>
+                            )}
+                            {allowTritonOpt && (
+                              <button
+                                onClick={() =>
+                                  handleAddPass(irWin.id, "triton-opt")
+                                }
+                                className="tool-btn"
+                              >
+                                triton-opt
+                              </button>
+                            )}
+                            {allowTritonLLVMOpt && (
+                              <button
+                                onClick={() =>
+                                  handleAddPass(irWin.id, "triton-llvm-opt")
+                                }
+                                className="tool-btn"
+                              >
+                                triton-llvm-opt
+                              </button>
+                            )}
+                            {allowLlvmOpt && (
+                              <button
+                                onClick={() => handleAddPass(irWin.id, "opt")}
+                                className="tool-btn"
+                              >
+                                opt
+                              </button>
+                            )}
+                            {allowLLC && (
+                              <button
+                                onClick={() => handleAddPass(irWin.id, "llc")}
+                                className="tool-btn"
+                              >
+                                llc
+                              </button>
+                            )}
+                          </div>
+                        ),
+                      },
+                    ]}
+                  />
+                  <Input
+                    placeholder="Call any tool in PATH + flags, e.g. `mlir-opt -convert-scf-to-cf` or `opt -O2 -S` and press `Enter`"
+                    value={customToolCmd[irWin.id] || ""}
+                    onChange={(e) =>
+                      updateActiveSource((s) => ({
+                        ...s,
+                        customToolCmd: {
+                          ...s.customToolCmd,
+                          [irWin.id]: e.target.value,
+                        },
+                      }))
+                    }
+                    onPressEnter={() => {
+                      const flags = (customToolCmd[irWin.id] || "").trim();
+                      if (!flags) return;
+                      handleAddCustomTool(irWin.id, flags);
+                      updateActiveSource((s) => ({
+                        ...s,
+                        customToolCmd: { ...s.customToolCmd, [irWin.id]: "" },
+                      }));
+                    }}
+                    style={{
+                      width: "100%",
+                      marginBottom: "10px",
+                    }}
+                  />
+                </>
+              );
+            })()}
+            {irWin.pipeline.length > 0 && (
+              <div
+                style={{
+                  marginBottom: "10px",
+                  backgroundColor: theme === "light" ? "#eef" : "#444",
+                  padding: "6px",
+                  borderRadius: "6px",
+                  fontSize: "0.8em",
+                }}
+              >
+                <div
+                  style={{
+                    marginBottom: "4px",
+                    backgroundColor: theme === "light" ? "#eee" : "#555",
+                    padding: "4px 4px",
+                    borderRadius: "6px",
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <span
+                    style={{
+                      backgroundColor: controlBg,
+                      padding: "2px 4px",
+                      borderRadius: "4px",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Compilation pipeline:
+                  </span>
+                  <span
+                    style={{
+                      backgroundColor: "#ffeb3b",
+                      padding: "2px 4px",
+                      borderRadius: "4px",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {getLabelForIR(irWin.selectedIR)}
+                  </span>
+                  {irWin.pipeline.map((p, i) => {
+                    const preview =
+                      p.flags.length <= 25
+                        ? p.flags
+                        : `${p.flags.slice(0, 15)}…${p.flags.slice(-10)}`;
+                    return (
+                      <React.Fragment key={i}>
+                        <span
+                          style={{
+                            fontSize: "1.2em",
+                            color: "#666",
+                          }}
+                        >
+                          →
+                        </span>
+                        <span
+                          onClick={() =>
+                            handleEditPass(irWin.id, i, p.tool, p.flags)
+                          }
+                          style={{
+                            backgroundColor: "#a5d6a7",
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontWeight: "bold",
+                            display: "flex",
+                            flexDirection: "column",
+                            lineHeight: "1.2em",
+                          }}
+                        >
+                          {p.tool !== "user-tool" && <span>{p.tool}</span>}
+                          <span
+                            style={{
+                              fontSize: "0.8em",
+                              color: "#555",
+                            }}
+                          >
+                            {preview}
+                          </span>
+                        </span>
+                        <button
+                          onClick={() => {
+                            setExploreStage({
+                              windowId: irWin.id,
+                              stageIdx: i,
+                            });
+                            generateIR(irWin.id);
+                          }}
+                          style={{
+                            marginLeft: 4,
+                            padding: "2px 6px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          🔍
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <div
+              style={{
+                display: "flex",
+                gap: "6px",
+                marginBottom: "6px",
+              }}
+            >
+              <button
+                onClick={() => generateIR(irWin.id)}
+                style={{
+                  flex: 3,
+                  padding: "4px",
+                  backgroundColor: "#5fa",
+                  border: "none",
+                  borderRadius: "5px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+                disabled={irWin.loading}
+              >
+                {irWin.loading ? "Generating..." : "Generate IR"}
+              </button>
+              <button
+                onClick={() =>
+                  updateActiveSource((s) => ({
+                    ...s,
+                    irWindows: s.irWindows.map((w) =>
+                      w.id === irWin.id
+                        ? { ...w, dumpAfterEachOpt: !w.dumpAfterEachOpt }
+                        : w,
+                    ),
+                  }))
+                }
+                style={{
+                  flex: 1,
+                  padding: "4px",
+                  backgroundColor: irWin.dumpAfterEachOpt ? "#5fa" : "#ccc",
+                  border: "none",
+                  borderRadius: "5px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                {irWin.dumpAfterEachOpt
+                  ? "✓ Print IR after opts"
+                  : "Print IR after opts"}
+              </button>
+              {exploreStage.windowId === irWin.id && (
+                <button
+                  onClick={() =>
+                    setExploreStage({ windowId: null, stageIdx: null })
+                  }
+                  style={{
+                    flex: 1,
+                    padding: "4px",
+                    backgroundColor: controlBg,
+                    border: "none",
+                    borderRadius: "5px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }}
+                >
+                  Reset Explore At Stage
+                </button>
+              )}
+            </div>
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflow: "auto",
+              }}
+            >
+              <Editor
+                height="100%"
+                language="mlir"
+                value={
+                  exploreStage.windowId === irWin.id
+                    ? filterToStage(irWin.output, exploreStage.stageIdx)
+                    : irWin.output
+                }
+                onChange={() => {}}
+                theme={theme === "light" ? "mlirTheme" : "mlirThemeDark"}
+                options={{ readOnly: true }}
+              />
+            </div>
+          </>
+        )}
+      </>
+    );
+  }
 
   const sourceTabs = sources.map((src) => ({
     label: src.name,
@@ -649,6 +1124,7 @@ export default function ExplorerContent() {
                 >
                   <option value="vertical">Vertical Layout</option>
                   <option value="horizontal">Horizontal Layout</option>
+                  <option value="freeform">Freeform Layout</option>
                 </select>
                 <select
                   value={theme}
@@ -758,544 +1234,134 @@ export default function ExplorerContent() {
                 padding: "0 10px 10px",
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: layout === "vertical" ? "column" : "row",
-                  flexWrap: layout === "horizontal" ? "wrap" : "nowrap",
-                  gap: "6px",
-                  alignItems: "stretch",
-                  height: "100%",
-                }}
-              >
-                {irWindows.map((irWin) => (
-                  <div
-                    key={irWin.id}
-                    style={{
-                      backgroundColor: panelBg,
-                      borderRadius: "8px",
-                      padding: "10px",
-                      opacity: 0.9,
-                      boxShadow: "0 0 10px rgba(0,0,0,0.2)",
-                      display: "flex",
-                      flexDirection: "column",
-                      flex:
-                        irWin.collapsed
+              {layout === "freeform" ? (
+                <div
+                  className="stage"
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: "100%",
+                  }}
+                >
+                  {irWindows
+                    .slice()
+                    .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
+                    .map((irWin) => (
+                      <DraggableWindow
+                        key={irWin.id}
+                        id={irWin.id}
+                        zIndex={irWin.zIndex || 1}
+                        pos={irWin.pos || { x: 24, y: 24 }}
+                        size={irWin.size || { w: 560, h: 420 }}
+                        collapsed={irWin.collapsed}
+                        onFocus={() =>
+                          updateActiveSource((s) => bumpZ(s, irWin.id))
+                        }
+                        onDrag={(pos) =>
+                          updateActiveSource((s) => setPos(s, irWin.id, pos))
+                        }
+                        onResize={(size, pos) =>
+                          updateActiveSource((s) =>
+                            setSizeAndPos(s, irWin.id, size, pos),
+                          )
+                        }
+                      >
+                        <div
+                          style={{
+                            backgroundColor: panelBg,
+                            borderRadius: "8px",
+                            padding: "10px",
+                            opacity: 0.9,
+                            boxShadow: "0 0 10px rgba(0,0,0,0.2)",
+                            display: "flex",
+                            flexDirection: "column",
+                            height: "100%",
+                          }}
+                        >
+                          <IRWindowBody irWin={irWin} />
+                        </div>
+                      </DraggableWindow>
+                    ))}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: layout === "vertical" ? "column" : "row",
+                    flexWrap: layout === "horizontal" ? "wrap" : "nowrap",
+                    gap: "6px",
+                    alignItems: "stretch",
+                    height: "100%",
+                  }}
+                >
+                  {irWindows.map((irWin) => (
+                    <div
+                      key={irWin.id}
+                      style={{
+                        backgroundColor: panelBg,
+                        borderRadius: "8px",
+                        padding: "10px",
+                        opacity: 0.9,
+                        boxShadow: "0 0 10px rgba(0,0,0,0.2)",
+                        display: "flex",
+                        flexDirection: "column",
+                        flex: irWin.collapsed
                           ? "0 0 auto"
                           : layout === "horizontal"
                             ? "1 1 calc(50% - 6px)"
                             : "0 0 auto",
-                      minWidth: layout === "horizontal" ? "30%" : "auto",
-                      height: irWin.collapsed ? "auto" : "100%",
-                      boxSizing: "border-box",
-                      minHeight: 0,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "10px",
+                        minWidth: layout === "horizontal" ? "30%" : "auto",
+                        height: irWin.collapsed ? "auto" : "100%",
+                        boxSizing: "border-box",
+                        minHeight: 0,
                       }}
                     >
-                      <h3>Output {getLabelForIR(irWin.selectedIR)}</h3>
-                      <div>
-                        <button
-                          onClick={() => toggleCollapse(irWin.id)}
-                          style={{
-                            marginRight: "8px",
-                            padding: "5px",
-                            backgroundColor: controlBg,
-                            border: "none",
-                            borderRadius: "5px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {irWin.collapsed ? "Expand" : "Collapse"}
-                        </button>
-                        <button
-                          onClick={() => removeWindow(irWin.id)}
-                          style={{
-                            backgroundColor: "#f66",
-                            border: "none",
-                            borderRadius: "5px",
-                            cursor: "pointer",
-                            padding: "5px 10px",
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
+                      <IRWindowBody irWin={irWin} />
                     </div>
-                    {!irWin.collapsed && (
-                      <>
-                        <select
-                          value={irWin.selectedIR}
-                          onChange={(e) => handleIRChange(irWin.id, e)}
-                          style={{ marginBottom: "10px" }}
-                        >
-                          {getIROptions().map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                        {(() => {
-                          // determine which built-in tool buttons to show
-                          const allowTorchMlirOpt = [
-                            "torch_script_graph_ir",
-                            "torch_mlir",
-                            "raw_ir",
-                          ].includes(irWin.selectedIR);
-                          const allowMlirOpt = [
-                            "torch_script_graph_ir",
-                            "torch_mlir",
-                            "tosa_mlir",
-                            "linalg_on_tensors_mlir",
-                            "stablehlo_mlir",
-                            "llvm_mlir",
-                            "raw_ir",
-                          ].includes(irWin.selectedIR);
-                          const allowMlirTranslate = allowMlirOpt;
-                          const allowTritonOpt = [
-                            "triton_ir",
-                            "triton_gpu_ir",
-                          ].includes(irWin.selectedIR);
-                          const allowTritonLLVMOpt = [
-                            "triton_ir",
-                            "triton_gpu_ir",
-                            "triton_llvm_ir",
-                          ].includes(irWin.selectedIR);
-                          const allowLlvmOpt = ![
-                            "triton_nvptx",
-                            "nvptx",
-                            "amdgpu",
-                            "spirv",
-                          ].includes(irWin.selectedIR);
-                          const allowLLC = allowLlvmOpt;
-                          const allowUserTool = true;
+                  ))}
+                </div>
+              )}
 
-                          if (
-                            !allowTorchMlirOpt &&
-                            !allowMlirOpt &&
-                            !allowMlirTranslate &&
-                            !allowTritonOpt &&
-                            !allowTritonLLVMOpt &&
-                            !allowLlvmOpt &&
-                            !allowLLC &&
-                            !allowUserTool
-                          ) {
-                            return null;
-                          }
-
-                          return (
-                            <>
-                              <Collapse
-                                defaultActiveKey={["1"]}
-                                style={{ marginBottom: "10px" }}
-                                items={[
-                                  {
-                                    key: "tools",
-                                    label: (
-                                      <span
-                                        style={{
-                                          fontSize: "0.85rem",
-                                          padding: "4px 8px",
-                                        }}
-                                      >
-                                        Use predefined toolbar
-                                      </span>
-                                    ),
-                                    children: (
-                                      <div
-                                        style={{
-                                          display: "flex",
-                                          flexWrap: "wrap",
-                                          gap: "20px",
-                                        }}
-                                      >
-                                        {allowTorchMlirOpt && (
-                                          <button
-                                            onClick={() =>
-                                              handleAddPass(
-                                                irWin.id,
-                                                "torch-mlir-opt",
-                                              )
-                                            }
-                                            className="tool-btn"
-                                          >
-                                            torch-mlir-opt
-                                          </button>
-                                        )}
-                                        {allowMlirOpt && (
-                                          <button
-                                            onClick={() =>
-                                              handleAddPass(
-                                                irWin.id,
-                                                "mlir-opt",
-                                              )
-                                            }
-                                            className="tool-btn"
-                                          >
-                                            mlir-opt
-                                          </button>
-                                        )}
-                                        {allowMlirTranslate && (
-                                          <button
-                                            onClick={() =>
-                                              handleAddPass(
-                                                irWin.id,
-                                                "mlir-translate",
-                                              )
-                                            }
-                                            className="tool-btn"
-                                          >
-                                            mlir-translate
-                                          </button>
-                                        )}
-                                        {allowTritonOpt && (
-                                          <button
-                                            onClick={() =>
-                                              handleAddPass(
-                                                irWin.id,
-                                                "triton-opt",
-                                              )
-                                            }
-                                            className="tool-btn"
-                                          >
-                                            triton-opt
-                                          </button>
-                                        )}
-                                        {allowTritonLLVMOpt && (
-                                          <button
-                                            onClick={() =>
-                                              handleAddPass(
-                                                irWin.id,
-                                                "triton-llvm-opt",
-                                              )
-                                            }
-                                            className="tool-btn"
-                                          >
-                                            triton-llvm-opt
-                                          </button>
-                                        )}
-                                        {allowLlvmOpt && (
-                                          <button
-                                            onClick={() =>
-                                              handleAddPass(irWin.id, "opt")
-                                            }
-                                            className="tool-btn"
-                                          >
-                                            opt
-                                          </button>
-                                        )}
-                                        {allowLLC && (
-                                          <button
-                                            onClick={() =>
-                                              handleAddPass(irWin.id, "llc")
-                                            }
-                                            className="tool-btn"
-                                          >
-                                            llc
-                                          </button>
-                                        )}
-                                      </div>
-                                    ),
-                                  },
-                                ]}
-                              />
-                              <Input
-                                placeholder="Call any tool in PATH + flags, e.g. `mlir-opt -convert-scf-to-cf` or `opt -O2 -S` and press `Enter`"
-                                value={customToolCmd[irWin.id] || ""}
-                                onChange={(e) =>
-                                  updateActiveSource((s) => ({
-                                    ...s,
-                                    customToolCmd: {
-                                      ...s.customToolCmd,
-                                      [irWin.id]: e.target.value,
-                                    },
-                                  }))
-                                }
-                                onPressEnter={() => {
-                                  const flags = (
-                                    customToolCmd[irWin.id] || ""
-                                  ).trim();
-                                  if (!flags) return;
-                                  handleAddCustomTool(irWin.id, flags);
-                                  updateActiveSource((s) => ({
-                                    ...s,
-                                    customToolCmd: {
-                                      ...s.customToolCmd,
-                                      [irWin.id]: "",
-                                    },
-                                  }));
-                                }}
-                                style={{
-                                  width: "100%",
-                                  marginBottom: "10px",
-                                }}
-                              />
-                            </>
-                          );
-                        })()}
-                        {irWin.pipeline.length > 0 && (
-                          <div
-                            style={{
-                              marginBottom: "10px",
-                              backgroundColor:
-                                theme === "light" ? "#eef" : "#444",
-                              padding: "6px",
-                              borderRadius: "6px",
-                              fontSize: "0.8em",
-                            }}
-                          >
-                            <div
-                              style={{
-                                marginBottom: "4px",
-                                backgroundColor:
-                                  theme === "light" ? "#eee" : "#555",
-                                padding: "4px 4px",
-                                borderRadius: "6px",
-                                display: "flex",
-                                flexWrap: "wrap",
-                                alignItems: "center",
-                                gap: "4px",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  backgroundColor: controlBg,
-                                  padding: "2px 4px",
-                                  borderRadius: "4px",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                Compilation pipeline:
-                              </span>
-                              <span
-                                style={{
-                                  backgroundColor: "#ffeb3b",
-                                  padding: "2px 4px",
-                                  borderRadius: "4px",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                {getLabelForIR(irWin.selectedIR)}
-                              </span>
-                              {irWin.pipeline.map((p, i) => {
-                                const preview =
-                                  p.flags.length <= 25
-                                    ? p.flags
-                                    : `${p.flags.slice(0, 15)}…${p.flags.slice(
-                                        -10,
-                                      )}`;
-                                return (
-                                  <React.Fragment key={i}>
-                                    <span
-                                      style={{
-                                        fontSize: "1.2em",
-                                        color: "#666",
-                                      }}
-                                    >
-                                      →
-                                    </span>
-                                    <span
-                                      onClick={() =>
-                                        handleEditPass(
-                                          irWin.id,
-                                          i,
-                                          p.tool,
-                                          p.flags,
-                                        )
-                                      }
-                                      style={{
-                                        backgroundColor: "#a5d6a7",
-                                        padding: "2px 8px",
-                                        borderRadius: "4px",
-                                        cursor: "pointer",
-                                        fontWeight: "bold",
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        lineHeight: "1.2em",
-                                      }}
-                                    >
-                                      {p.tool !== "user-tool" && (
-                                        <span>{p.tool}</span>
-                                      )}
-                                      <span
-                                        style={{
-                                          fontSize: "0.8em",
-                                          color: "#555",
-                                        }}
-                                      >
-                                        {preview}
-                                      </span>
-                                    </span>
-                                    <button
-                                      onClick={() => {
-                                        setExploreStage({
-                                          windowId: irWin.id,
-                                          stageIdx: i,
-                                        });
-                                        generateIR(irWin.id);
-                                      }}
-                                      style={{
-                                        marginLeft: 4,
-                                        padding: "2px 6px",
-                                        cursor: "pointer",
-                                      }}
-                                    >
-                                      🔍
-                                    </button>
-                                  </React.Fragment>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: "6px",
-                            marginBottom: "6px",
-                          }}
-                        >
-                          <button
-                            onClick={() => generateIR(irWin.id)}
-                            style={{
-                              flex: 3,
-                              padding: "4px",
-                              backgroundColor: "#5fa",
-                              border: "none",
-                              borderRadius: "5px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                            }}
-                            disabled={irWin.loading}
-                          >
-                            {irWin.loading ? "Generating..." : "Generate IR"}
-                          </button>
-                          <button
-                            onClick={() =>
-                              updateActiveSource((s) => ({
-                                ...s,
-                                irWindows: s.irWindows.map((w) =>
-                                  w.id === irWin.id
-                                    ? {
-                                        ...w,
-                                        dumpAfterEachOpt: !w.dumpAfterEachOpt,
-                                      }
-                                    : w,
-                                ),
-                              }))
-                            }
-                            style={{
-                              flex: 1,
-                              padding: "4px",
-                              backgroundColor: irWin.dumpAfterEachOpt
-                                ? "#5fa"
-                                : "#ccc",
-                              border: "none",
-                              borderRadius: "5px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {irWin.dumpAfterEachOpt
-                              ? "✓ Print IR after opts"
-                              : "Print IR after opts"}
-                          </button>
-                          {exploreStage.windowId === irWin.id && (
-                            <button
-                              onClick={() =>
-                                setExploreStage({
-                                  windowId: null,
-                                  stageIdx: null,
-                                })
-                              }
-                              style={{
-                                flex: 1,
-                                padding: "4px",
-                                backgroundColor: controlBg,
-                                border: "none",
-                                borderRadius: "5px",
-                                fontWeight: "bold",
-                                cursor: "pointer",
-                              }}
-                            >
-                              Reset Explore At Stage
-                            </button>
-                          )}
-                        </div>
-                        <div
-                          style={{
-                            flex: 1,
-                            minHeight: 0,
-                            overflow: "auto",
-                          }}
-                        >
-                          <Editor
-                            height="100%"
-                            language="mlir"
-                            value={
-                              exploreStage.windowId === irWin.id
-                                ? filterToStage(
-                                    irWin.output,
-                                    exploreStage.stageIdx,
-                                  )
-                                : irWin.output
-                            }
-                            onChange={() => {}}
-                            theme={theme === "light" ? "mlirTheme" : "mlirThemeDark"}
-                            options={{ readOnly: true }}
-                          />
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-            {editModalVisible && (
-              <div
-                style={{
-                  position: "fixed",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  backgroundColor: panelBg,
-                  border: "1px solid #ccc",
-                  padding: "50px",
-                  borderRadius: "8px",
-                  boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-                  zIndex: 1000,
-                }}
-              >
-                <h3>Edit Compilation Pass</h3>
-                <input
-                  type="text"
-                  value={editFlags}
-                  onChange={(e) => setEditFlags(e.target.value)}
-                  style={{ width: "100%", marginBottom: "10px" }}
-                />
+              {editModalVisible && (
                 <div
                   style={{
-                    display: "flex",
-                    gap: "200px",
-                    justifyContent: "flex-end",
+                    position: "fixed",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    backgroundColor: panelBg,
+                    border: "1px solid #ccc",
+                    padding: "50px",
+                    borderRadius: "8px",
+                    boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+                    zIndex: 1000,
                   }}
                 >
-                  <button onClick={handleUpdatePass}>Update</button>
-                  <button onClick={handleRemovePass} style={{ color: "red" }}>
-                    Remove
-                  </button>
-                  <button onClick={() => setEditModalVisible(false)}>
-                    Cancel
-                  </button>
+                  <h3>Edit Compilation Pass</h3>
+                  <input
+                    type="text"
+                    value={editFlags}
+                    onChange={(e) => setEditFlags(e.target.value)}
+                    style={{ width: "100%", marginBottom: "10px" }}
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "200px",
+                      justifyContent: "flex-end",
+                    }}
+                  >
+                    <button onClick={handleUpdatePass}>Update</button>
+                    <button onClick={handleRemovePass} style={{ color: "red" }}>
+                      Remove
+                    </button>
+                    <button onClick={() => setEditModalVisible(false)}>
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </Splitter.Panel>
       </Splitter>
