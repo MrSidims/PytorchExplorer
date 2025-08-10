@@ -1,0 +1,38 @@
+name: Format
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'public/**'
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install formatters
+        run: pip install black
+
+      - name: Run formatters
+        run: |
+          black .
+          npx --yes prettier@3 '**/*.{js,mjs}' --ignore-path .gitignore --write
+          git --no-pager diff --patch --exit-code
