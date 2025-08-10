@@ -534,6 +534,12 @@ export default function ExplorerContent() {
   }
 
   function IRWindowBody({ irWin }) {
+    const [localCmd, setLocalCmd] = useState(customToolCmd[irWin.id] || "");
+
+    useEffect(() => {
+      setLocalCmd(customToolCmd[irWin.id] || "");
+    }, [customToolCmd, irWin.id]);
+
     return (
       <>
         <div
@@ -738,25 +744,27 @@ export default function ExplorerContent() {
                   />
                   <Input
                     placeholder="Call any tool in PATH + flags, e.g. `mlir-opt -convert-scf-to-cf` or `opt -O2 -S` and press `Enter`"
-                    value={customToolCmd[irWin.id] || ""}
-                    onChange={(e) =>
-                      updateActiveSource((s) => ({
-                        ...s,
-                        customToolCmd: {
-                          ...s.customToolCmd,
-                          [irWin.id]: e.target.value,
-                        },
-                      }))
-                    }
+                    value={localCmd}
+                    onChange={(e) => setLocalCmd(e.target.value)}
                     onPressEnter={() => {
-                      const flags = (customToolCmd[irWin.id] || "").trim();
+                      const flags = localCmd.trim();
                       if (!flags) return;
                       handleAddCustomTool(irWin.id, flags);
+                      setLocalCmd("");
                       updateActiveSource((s) => ({
                         ...s,
                         customToolCmd: { ...s.customToolCmd, [irWin.id]: "" },
                       }));
                     }}
+                    onBlur={() =>
+                      updateActiveSource((s) => ({
+                        ...s,
+                        customToolCmd: {
+                          ...s.customToolCmd,
+                          [irWin.id]: localCmd,
+                        },
+                      }))
+                    }
                     style={{
                       width: "100%",
                       marginBottom: "10px",
