@@ -94,7 +94,9 @@ const pytorchIROptions = [
   { value: "nvptx", label: "NVPTX" },
   { value: "amdgpu", label: "AMDGPU" },
   { value: "spirv", label: "SPIR-V" },
-  { value: "raw_ir", label: "Raw IR Output" },
+
+  { value: "raw_ir",
+     label: "Raw IR Output" },
 ];
 
 const tritonIROptions = [
@@ -106,7 +108,8 @@ const tritonIROptions = [
   { value: "raw_ir", label: "Raw IR Output" },
 ];
 
-const rawIROptions = [{ value: "raw_ir", label: "Raw IR Output" }];
+const rawIROptions = [
+  { value: "raw_ir", label: "Raw IR Output" }];
 
 export default function ExplorerContent() {
   const { sources, setSources, activeSourceId, setActiveSourceId } =

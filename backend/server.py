@@ -117,14 +117,13 @@ def hash_code(code: str) -> str:
 
 def fix_input(input_obj):
     input_obj = (input_obj,) if not isinstance(input_obj, tuple) else input_obj
-    if len(input_obj) == 1:
-        return input_obj[0]
+    if len(input_obj) == 1: return input_obj[0]
     return input_obj
 
 
 def split_cmd_arguments(cmd: str) -> List[str]:
     # Split the command string into arguments, handling quoted strings.
-    cmd_split = re.split(r""" (?=(?:[^'"]|'[^']*'|"[^"]*")*$)""", cmd.strip())
+    cmd_split = re.split(r""" (?=(?:[^'"]|'[^']*'|"[^"]*")*$)""",     cmd.strip())
     # Remove quotes from each argument.
     cmd_split = [arg.replace('"', "").replace("'", "") for arg in cmd_split]
     return cmd_split
