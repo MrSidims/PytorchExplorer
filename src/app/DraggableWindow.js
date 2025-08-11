@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useEffect } from "react";
 
 /**
  * Lightweight draggable/resizable wrapper used when the react-rnd package
@@ -25,7 +25,10 @@ export function DraggableWindow({
 
   const startDrag = (e) => {
     const handle = e.target.closest(".drag-title");
-    if (!handle) return;
+    if (!handle) {
+      e.stopPropagation();
+      return;
+    }
     onFocus && onFocus();
     const startX = e.clientX;
     const startY = e.clientY;
@@ -54,6 +57,13 @@ export function DraggableWindow({
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   };
+
+  useEffect(() => {
+    const title = ref.current?.querySelector(".drag-title");
+    if (!title) return;
+    title.addEventListener("mousedown", startDrag);
+    return () => title.removeEventListener("mousedown", startDrag);
+  }, [startDrag, children]);
 
   const startResize = (e, dir) => {
     e.stopPropagation();
@@ -139,7 +149,6 @@ export function DraggableWindow({
   return (
     <div
       ref={ref}
-      onMouseDown={startDrag}
       style={{
         position: "absolute",
         left: pos.x,
