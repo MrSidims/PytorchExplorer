@@ -20,6 +20,7 @@ model = MyModel()
 example_input = torch.randn(4, 4)
 """
 
+
 @pytest.mark.parametrize("ir_type", ["llvm_mlir"])
 def test_wrong_command_line(ir_type):
     payload = {
