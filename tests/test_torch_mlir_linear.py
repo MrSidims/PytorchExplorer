@@ -4,6 +4,7 @@ import httpx
 
 API_URL = os.environ.get("API_URL", "http://localhost:8000/generate_ir")
 
+
 def test_torch_mlir_linear():
     code = """
 import torch

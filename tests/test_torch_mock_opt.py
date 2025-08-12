@@ -5,6 +5,7 @@ import shutil
 import pytest
 import httpx
 
+
 @pytest.fixture(scope="session")
 def mock_opt_path():
     cpp_src = os.path.abspath("tests/cpp_sources/mock-opt.cpp")
@@ -16,6 +17,7 @@ def mock_opt_path():
     yield exe_path
 
     shutil.rmtree(build_dir)
+
 
 def test_torch_mock_opt(mock_opt_path):
     code = """
@@ -41,7 +43,9 @@ example_input = torch.randn(4, 4)
         "dump_after_each_opt": True,
     }
 
-    response = httpx.post(os.environ.get("API_URL", "http://localhost:8000/generate_ir"), json=payload)
+    response = httpx.post(
+        os.environ.get("API_URL", "http://localhost:8000/generate_ir"), json=payload
+    )
     assert response.status_code == 200
     assert "graph(%self.1 : __torch__.builtins.MyModel," in response.json()["output"]
     assert "test mock_opt 42" in response.json()["output"]

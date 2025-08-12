@@ -12,6 +12,7 @@ pytestmark = pytest.mark.skipif(
     reason="No NVIDIA GPU detected. Skip",
 )
 
+
 @pytest.fixture(scope="session")
 def mock_opt_path():
     cpp_src = os.path.abspath("tests/cpp_sources/mock-opt.cpp")
@@ -23,6 +24,7 @@ def mock_opt_path():
     yield exe_path
 
     shutil.rmtree(build_dir)
+
 
 def test_triton_mock_opt(mock_opt_path):
     code = """
