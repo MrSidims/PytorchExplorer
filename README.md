@@ -40,6 +40,7 @@ tracing models through various IR stages and transformations.
 - Torch-MLIR
 - LLVM with mlir-opt
 - Triton
+- graphviz - needed in case if you want PytorchExplorer to get CFG from LLVM IR in a form of pdf.
 
 To setup PyTorch and Torch-MLIR it's a good idea to visit https://github.com/llvm/torch-mlir repository and follow instructions from there.
 
@@ -85,7 +86,7 @@ source setup_backend.sh
 
 If you already have a working venv for Torch-MLIR, you can just install FastAPI and testing dependencies:
 ```bash
-pip install fastapi uvicorn pytest httpx
+pip install fastapi uvicorn pytest httpx PyPDF2
 ```
 
 ### Run the application
@@ -200,6 +201,8 @@ on the right.
    individually.
 5. Hit **Store Session** to save your work. The backend returns a short ID which
    can be appended to the URL (e.g. `/abc123`) to reload the same session later.
+6. It's possible to build CFG into pdf file for LLVM IR, just call standart for LLVM
+   opt --passes=dot-cfg and CFG will be rendered in the output window.
 
 ## Implementation details
 

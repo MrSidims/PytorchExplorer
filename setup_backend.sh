@@ -16,7 +16,8 @@ sudo apt-get update
 sudo apt-get -y install \
     llvm-22-dev \
     llvm-22-tools \
-    mlir-22-tools
+    mlir-22-tools \
+    graphviz
 
 echo "Exporting LLVM 22 tools path..."
 export PATH=/usr/lib/llvm-22/bin:$PATH

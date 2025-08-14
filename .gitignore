@@ -47,3 +47,8 @@ next-env.d.ts
 
 # ignore stored sessions
 StoredSessions/*
+!StoredSessions/.gitkeep
+
+# session temps
+session_temps/*
+!session_temps/.gitkeep

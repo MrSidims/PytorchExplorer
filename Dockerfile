@@ -16,7 +16,7 @@ WORKDIR /app
 # Install minimal tooling
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      ca-certificates wget curl gnupg lsb-release software-properties-common && \
+      ca-certificates wget curl gnupg lsb-release software-properties-common graphviz && \
     rm -rf /var/lib/apt/lists/*
 
 # Add LLVM 22 repository
@@ -46,7 +46,7 @@ RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --pre torch-mlir torchvision \
       --extra-index-url=https://download.pytorch.org/whl/nightly/cpu \
       -f https://github.com/llvm/torch-mlir-release/releases/expanded_assets/dev-wheels && \
-    /opt/venv/bin/pip install triton fastapi uvicorn pytest httpx
+    /opt/venv/bin/pip install triton fastapi uvicorn pytest httpx PyPDF2
 
 # Create non-root user and fix permissions
 RUN useradd -u 10001 -m --shell /usr/sbin/nologin appuser && \

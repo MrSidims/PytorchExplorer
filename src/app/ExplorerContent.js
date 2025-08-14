@@ -540,6 +540,24 @@ export default function ExplorerContent() {
       setLocalCmd(customToolCmd[irWin.id] || "");
     }, [customToolCmd, irWin.id]);
 
+    const extractPdfs = (output) => {
+      const regex = /===== DOT PDF ([^=]+?) =====\n([\s\S]*?)(?=\n=====|$)/g;
+      let match;
+      let lastIndex = 0;
+      let text = "";
+      const pdfs = [];
+      while ((match = regex.exec(output)) !== null) {
+        text += output.slice(lastIndex, match.index);
+        pdfs.push({
+          name: match[1],
+          data: match[2].trim().replace(/\s+/g, ""),
+        });
+        lastIndex = regex.lastIndex;
+      }
+      text += output.slice(lastIndex);
+      return { textContent: text.trim(), pdfs };
+    };
+
     return (
       <>
         <div
@@ -945,23 +963,84 @@ export default function ExplorerContent() {
             </div>
             <div
               style={{
+                display: "flex",
+                flexDirection: "column",
                 flex: 1,
                 minHeight: 0,
-                overflow: "auto",
               }}
             >
-              <Editor
-                height="100%"
-                language="mlir"
-                value={
+              {(() => {
+                const displayOutput =
                   exploreStage.windowId === irWin.id
                     ? filterToStage(irWin.output, exploreStage.stageIdx)
-                    : irWin.output
-                }
-                onChange={() => {}}
-                theme={theme === "light" ? "mlirTheme" : "mlirThemeDark"}
-                options={{ readOnly: true }}
-              />
+                    : irWin.output;
+                const { textContent, pdfs } = extractPdfs(displayOutput);
+
+                const editorOnly = pdfs.length === 0;
+
+                return (
+                  <>
+                    {/* Keep editor full-height if no PDFs; otherwise give it a small fixed height */}
+                    <div
+                      style={{
+                        flex: editorOnly ? "1 1 0" : "0 0 auto",
+                        minHeight: 0,
+                      }}
+                    >
+                      <Editor
+                        height={editorOnly ? "100%" : "260px"}
+                        language="mlir"
+                        value={textContent}
+                        onChange={() => {}}
+                        theme={
+                          theme === "light" ? "mlirTheme" : "mlirThemeDark"
+                        }
+                        options={{ readOnly: true }}
+                      />
+                    </div>
+
+                    {/* PDF area fills all remaining space */}
+                    {pdfs.length > 0 && (
+                      <div
+                        style={{
+                          flex: "1 1 0",
+                          minHeight: 0,
+                          overflow: "auto",
+                        }}
+                      >
+                        {pdfs.length === 1 ? (
+                          <iframe
+                            title={pdfs[0].name}
+                            src={`data:application/pdf;base64,${pdfs[0].data}`}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              border: "none",
+                            }}
+                          />
+                        ) : (
+                          // If there are multiple PDFs, keep them scrollable;
+                          // each gets a reasonable min height but the container still fills.
+                          <div style={{ display: "grid", gap: 8 }}>
+                            {pdfs.map((p, i) => (
+                              <iframe
+                                key={i}
+                                title={p.name}
+                                src={`data:application/pdf;base64,${p.data}`}
+                                style={{
+                                  width: "100%",
+                                  height: "480px",
+                                  border: "none",
+                                }}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </>
         )}
