@@ -9,8 +9,10 @@ import shutil
 import atexit
 import logging
 import traceback
+import base64
 from typing import List, Optional, Tuple
 import re
+from pathlib import Path
 
 from contextlib import redirect_stdout, redirect_stderr
 
@@ -31,6 +33,11 @@ from .errors import (
     CompilerPipelineError,
 )
 
+try:
+    from PyPDF2 import PdfMerger
+except Exception:
+    PdfMerger = None
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -45,6 +52,14 @@ app.add_middleware(
 )
 
 cached_triton_runs = {}
+
+# Where to store per-request temporary artifacts (DOT/PDF/IR)
+# Default: <project_root>/session_temps, override with PE_SESSION_TEMPS
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SESSION_TEMPS_ROOT = os.environ.get(
+    "PE_SESSION_TEMPS", str(PROJECT_ROOT / "session_temps")
+)
+os.makedirs(SESSION_TEMPS_ROOT, exist_ok=True)
 
 TORCH_MLIR_OPT_PATH = os.environ.get("TORCH_MLIR_OPT_PATH", "")
 LLVM_BIN_PATH = os.environ.get("LLVM_BIN_PATH", "")
@@ -132,11 +147,13 @@ def split_cmd_arguments(cmd: str) -> List[str]:
 
 # Run torch-mlir-opt and/or mlir-opt and/or opt etc.
 def run_external_opt_tool_file(
-    input_path: str, cmd: str, tool: str, output_path: str
+    input_path: str, cmd: str, tool: str, output_path: str, cwd: Optional[str] = None
 ) -> Tuple[bool, str]:
     args = [tool] + split_cmd_arguments(cmd) + [input_path, "-o", output_path]
     try:
-        result = subprocess.run(args, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            args, capture_output=True, text=True, check=True, cwd=cwd
+        )
         return (True, result.stderr or "")
     except subprocess.CalledProcessError as e:
         logger.error(
@@ -151,80 +168,202 @@ def run_external_opt_tool_file(
         raise CompilerPipelineError(f"Unexpected error while running '{tool}': {e}")
 
 
+def _read_file_safe(path: str) -> Tuple[str, bool]:
+    # Read a file returning its text or base64 if binary.
+    # Returns a tuple of (content, is_binary). If the file cannot be decoded as
+    # UTF-8, it is assumed to be binary and returned base64-encoded.
+
+    with open(path, "rb") as f:
+        data = f.read()
+    try:
+        return data.decode("utf-8"), False
+    except UnicodeDecodeError:
+        encoded = base64.b64encode(data).decode("utf-8")
+        return encoded, True
+
+
 # Utility for custom pipeline.
 def apply_optional_passes(
     ir: str, pipeline: List[Tuple[str, str]], dump_each: bool = False
 ) -> str:
     uid = uuid.uuid4().hex
     output = ""
-    temp_files = []
+    pdf_blocks: List[Tuple[str, str]] = []
 
-    # Step 1: Write initial IR to a file.
-    with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
-        f.write(ir)
-        f.flush()
-        prev_path = f.name
-        temp_files.append(prev_path)
-
-    if dump_each:
-        output += f"\n\n===== Initial IR =====\n{ir}"
-
-    # Step 2: Apply pipeline stages.
-    for index, (tool, flags) in enumerate(pipeline):
-        tool_path = None
-
-        if tool == "torch-mlir-opt":
-            tool_path = os.path.join(TORCH_MLIR_OPT_PATH, "torch-mlir-opt")
-        elif tool == "mlir-opt":
-            tool_path = os.path.join(LLVM_BIN_PATH, "mlir-opt")
-        elif tool == "mlir-translate":
-            tool_path = os.path.join(LLVM_BIN_PATH, "mlir-translate")
-        elif tool == "opt":
-            flags += " -S"
-            tool_path = os.path.join(LLVM_BIN_PATH, "opt")
-        elif tool == "llc":
-            tool_path = os.path.join(LLVM_BIN_PATH, "llc")
-        elif tool == "triton-opt":
-            tool_path = os.path.join(TRITON_OPT_PATH, "triton-opt")
-        elif tool == "triton-llvm-opt":
-            tool_path = os.path.join(TRITON_OPT_PATH, "triton-llvm-opt")
-        elif tool == "user-tool":
-            tokens = split_cmd_arguments(flags)
-            if not tokens:
-                raise CompilerPipelineError("Empty user-tool invocation")
-            tool_path = tokens[0]
-            flags = " ".join(tokens[1:])
-        else:
-            raise CompilerPipelineError(f"Unknown pipeline tool: '{tool}'")
-
-        out_path = os.path.join(tempfile.gettempdir(), f"ir_step_{index}_{uid}")
-        temp_files.append(out_path)
-
-        success, stderr = run_external_opt_tool_file(
-            prev_path, flags, tool_path, out_path
-        )
-        if not success:
-            raise CompilerPipelineError(f"{tool} failed: {stderr}")
+    # Make one session dir under PytorchExplorer/session_temps.
+    session_dir = tempfile.mkdtemp(dir=SESSION_TEMPS_ROOT, prefix=f"sess_{uid}_")
+    try:
+        # Step 1: Write initial IR into the session dir.
+        prev_path = os.path.join(session_dir, f"ir_init_{uid}.ll")
+        with open(prev_path, "w") as f:
+            f.write(ir)
 
         if dump_each:
-            with open(out_path, "r") as f:
-                stage_output = f.read()
-            output += f"\n\n===== IR after {tool} {flags} =====\n{stage_output}"
+            output += f"\n\n===== Initial IR =====\n{ir}"
 
-        prev_path = out_path
+        # Step 2: Apply pipeline stages (all I/O + cwd inside session_dir).
+        for index, (tool, flags) in enumerate(pipeline):
+            if tool == "torch-mlir-opt":
+                tool_path = os.path.join(TORCH_MLIR_OPT_PATH, "torch-mlir-opt")
+            elif tool == "mlir-opt":
+                tool_path = os.path.join(LLVM_BIN_PATH, "mlir-opt")
+            elif tool == "mlir-translate":
+                tool_path = os.path.join(LLVM_BIN_PATH, "mlir-translate")
+            elif tool == "opt":
+                flags += " -S"
+                tool_path = os.path.join(LLVM_BIN_PATH, "opt")
+            elif tool == "llc":
+                tool_path = os.path.join(LLVM_BIN_PATH, "llc")
+            elif tool == "triton-opt":
+                tool_path = os.path.join(TRITON_OPT_PATH, "triton-opt")
+            elif tool == "triton-llvm-opt":
+                tool_path = os.path.join(TRITON_OPT_PATH, "triton-llvm-opt")
+            elif tool == "user-tool":
+                tokens = split_cmd_arguments(flags)
+                if not tokens:
+                    raise CompilerPipelineError("Empty user-tool invocation")
+                tool_path = tokens[0]
+                flags = " ".join(tokens[1:])
+                if os.path.basename(tool_path) == "opt" and "-S" not in flags.split():
+                    flags += " -S"
+            else:
+                raise CompilerPipelineError(f"Unknown pipeline tool: '{tool}'")
 
-    if not dump_each:
-        with open(prev_path, "r") as f:
-            output = f.read()
+            out_path = os.path.join(session_dir, f"ir_step_{index}_{uid}.ll")
 
-    # Cleanup.
-    for path in temp_files:
-        try:
-            os.remove(path)
-        except Exception:
-            pass
+            if "dot-cfg" in flags and "--dot-cfg-dir=" not in flags:
+                flags += f" --dot-cfg-dir={session_dir}"
 
-    return output
+            # Run the tool with cwd=session_dir so DOTs land here.
+            success, stderr = run_external_opt_tool_file(
+                prev_path, flags, tool_path, out_path, cwd=session_dir
+            )
+            if not success:
+                raise CompilerPipelineError(f"{tool} failed: {stderr}")
+
+            # Collect DOTs from session_dir -> convert to PDFs -> merge -> attach.
+            dot_files = sorted(
+                set(
+                    glob.glob(os.path.join(session_dir, "*.dot"))
+                    + glob.glob(os.path.join(session_dir, ".*.dot"))
+                )
+            )
+            pdf_paths: List[str] = []
+
+            # Only warn if user requested dot-cfg but no DOTs appeared.
+            if "dot-cfg" in flags and not dot_files:
+                logger.warning(
+                    "No *.dot emitted by -passes=dot-cfg; checked %s", session_dir
+                )
+
+            # Convert DOT -> PDF.
+            if dot_files:
+                if not shutil.which("dot"):
+                    logger.error(
+                        "'dot' (graphviz) not found on PATH; cannot render CFG PDFs."
+                    )
+                else:
+                    for df in sorted(set(dot_files)):
+                        pdf_path = os.path.splitext(df)[0] + ".pdf"
+                        try:
+                            subprocess.run(
+                                ["dot", "-Tpdf", df, "-o", pdf_path], check=True
+                            )
+                            pdf_paths.append(pdf_path)
+                        except Exception as e:
+                            logger.error(f"Failed to convert {df} to PDF: {e}")
+
+                # Remove DOTs after conversion (keep PDFs).
+                for df in dot_files:
+                    try:
+                        os.remove(df)
+                    except Exception:
+                        pass
+
+            def _encode_and_attach(path_to_pdf: str):
+                try:
+                    with open(path_to_pdf, "rb") as pf:
+                        encoded = base64.b64encode(pf.read()).decode("utf-8")
+                    pdf_blocks.append((os.path.basename(path_to_pdf), encoded))
+                    if dump_each:
+                        nonlocal output
+                        output += f"\n\n===== DOT PDF {os.path.basename(path_to_pdf)} =====\n{encoded}"
+                except Exception as e:
+                    logger.error(f"Failed to read PDF {path_to_pdf}: {e}")
+
+            # Merge PDFs if we have more than one.
+            if pdf_paths:
+                merged_ok = False
+                merged_path = os.path.join(session_dir, f"cfg-merged-stage-{index}.pdf")
+
+                if PdfMerger is not None:
+                    try:
+                        merger = PdfMerger()
+                        for p in sorted(pdf_paths):
+                            merger.append(p)
+                        with open(merged_path, "wb") as mf:
+                            merger.write(mf)
+                        merger.close()
+                        _encode_and_attach(merged_path)
+                        merged_ok = True
+                    except Exception as e:
+                        logger.error(f"PDF merge via PyPDF2 failed: {e}")
+
+                if not merged_ok and shutil.which("pdfunite"):
+                    try:
+                        cmd = ["pdfunite"] + sorted(pdf_paths) + [merged_path]
+                        subprocess.run(cmd, check=True)
+                        _encode_and_attach(merged_path)
+                        merged_ok = True
+                    except Exception as e:
+                        logger.error(f"PDF merge via pdfunite failed: {e}")
+
+                if not merged_ok:
+                    # Fall back to attaching individual PDFs.
+                    for p in sorted(pdf_paths):
+                        _encode_and_attach(p)
+
+            # Handle analysis-only stages (no output file produced).
+            wrote_output = os.path.exists(out_path)
+
+            if dump_each:
+                path_to_show = out_path if wrote_output else prev_path
+                stage_output, is_binary = _read_file_safe(path_to_show)
+                if not wrote_output:
+                    output += f"\n\n===== IR after {tool} {flags} (no new output; IR unchanged) =====\n"
+                else:
+                    output += f"\n\n===== IR after {tool} {flags} =====\n"
+                output += stage_output
+
+            if wrote_output:
+                prev_path = out_path
+
+        # Final assembly.
+        if not dump_each:
+            with open(prev_path, "rb") as f:
+                data = f.read()
+            try:
+                output = data.decode("utf-8")
+            except UnicodeDecodeError:
+                encoded = base64.b64encode(data).decode("utf-8")
+                if data.startswith(b"%PDF"):
+                    pdf_blocks.insert(
+                        0, (os.path.basename(prev_path) + ".pdf", encoded)
+                    )
+                    output = ""
+                else:
+                    output = f"===== BINARY OUTPUT {os.path.basename(prev_path)} =====\n{encoded}"
+
+            for name, encoded in pdf_blocks:
+                if output:
+                    output += "\n\n"
+                output += f"===== DOT PDF {name} =====\n{encoded}"
+
+        return output
+
+    finally:
+        # Nuke the whole session dir; PDFs/DOTs/IR intermediates are all ephemeral.
+        shutil.rmtree(session_dir, ignore_errors=True)
 
 
 # Torch graph IR.

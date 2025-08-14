@@ -9,7 +9,7 @@ WORKDIR /app
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      ca-certificates wget curl gnupg lsb-release software-properties-common && \
+      ca-certificates wget curl gnupg lsb-release software-properties-common graphviz && \
     rm -rf /var/lib/apt/lists/*
 
 RUN useradd -u 10001 -m --shell /usr/sbin/nologin appuser && \
@@ -28,7 +28,7 @@ RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --pre torch-mlir torchvision \
       --extra-index-url=https://download.pytorch.org/whl/nightly/cpu \
       -f https://github.com/llvm/torch-mlir-release/releases/expanded_assets/dev-wheels && \
-    /opt/venv/bin/pip install triton fastapi uvicorn pydantic
+    /opt/venv/bin/pip install triton fastapi uvicorn pydantic PyPDF2
 
 RUN chown -R appuser:appuser /home/appuser/.cache /app
 
