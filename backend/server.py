@@ -450,8 +450,9 @@ def lower_to_llvm_mlir(model, example_input) -> str:
 
     cmd = [
         os.path.join(LLVM_BIN_PATH, "mlir-opt"),
-        '--one-shot-bufferize=bufferize-function-boundaries',
-        "-canonicalize", "-cse",
+        "--one-shot-bufferize=bufferize-function-boundaries",
+        "-canonicalize",
+        "-cse",
         "-convert-linalg-to-loops",
         "-lower-affine",
         "-convert-scf-to-cf",
@@ -462,7 +463,8 @@ def lower_to_llvm_mlir(model, example_input) -> str:
         "-convert-func-to-llvm",
         "-convert-cf-to-llvm",
         "-reconcile-unrealized-casts",
-        "-canonicalize", "-cse",
+        "-canonicalize",
+        "-cse",
         input_path,
     ]
 
