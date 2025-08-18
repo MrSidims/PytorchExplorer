@@ -819,6 +819,7 @@ export default function ExplorerContent() {
                       padding: "2px 4px",
                       borderRadius: "4px",
                       fontWeight: "bold",
+                      fontSize: "1.1em",
                     }}
                   >
                     Compilation pipeline:
@@ -829,6 +830,8 @@ export default function ExplorerContent() {
                       padding: "2px 4px",
                       borderRadius: "4px",
                       fontWeight: "bold",
+                      fontSize: "1.1em",
+                      color: "#000",
                     }}
                   >
                     {getLabelForIR(irWin.selectedIR)}
@@ -842,8 +845,8 @@ export default function ExplorerContent() {
                       <React.Fragment key={i}>
                         <span
                           style={{
-                            fontSize: "1.2em",
-                            color: "#666",
+                            fontSize: "1.4em",
+                            color: "inherit",
                           }}
                         >
                           →
@@ -861,13 +864,15 @@ export default function ExplorerContent() {
                             display: "flex",
                             flexDirection: "column",
                             lineHeight: "1.2em",
+                            fontSize: "1.1em",
+                            color: "#000",
                           }}
                         >
                           {p.tool !== "user-tool" && <span>{p.tool}</span>}
                           <span
                             style={{
                               fontSize: "0.8em",
-                              color: "#555",
+                              color: "#000",
                             }}
                           >
                             {preview}
@@ -885,6 +890,7 @@ export default function ExplorerContent() {
                             marginLeft: 4,
                             padding: "2px 6px",
                             cursor: "pointer",
+                            fontSize: "1.1em",
                           }}
                         >
                           🔍
